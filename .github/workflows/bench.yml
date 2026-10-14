@@ -1,0 +1,30 @@
+name: bench
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read # to download the previous run's counts
+jobs:
+  instructions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      - run: ./scripts/build.sh --march x86-64-v3 # valgrind can't run AVX-512, which native may pick
+      - run: ./scripts/gen_corpus.sh 100000 # counts are per number, so a small corpus is enough
+      - name: Download the last main run's counts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list -w bench.yml -b main -s success -L 1 --json databaseId -q '.[0].databaseId')
+          if [ -n "$id" ]; then gh run download "$id" -n instructions -D prev || true; fi
+      - run: ./scripts/count_instr.sh prev/instructions.tsv >instructions.tsv
+      - run: |
+          awk -F'\t' 'BEGIN { print "| parser | corpus | instructions/number |\n|---|---|--:|" }
+                      { print "| " $1 " | " $2 " | " $3 " |" }' instructions.tsv >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instructions
+          path: instructions.tsv
