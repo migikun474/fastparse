@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build each tests/*.c (linked with src/*.c) into build/.
+# Build each tests/*.c (linked with src/*.c) into build/, plus build/bench on x86-64.
 # Usage: scripts/build.sh [--cc gcc|clang] [--march x86-64|x86-64-v2|x86-64-v3|native] [--san]
 #   --san: -O1 -g with ASan + UBSan; any sanitizer report aborts the test
 set -euo pipefail
@@ -19,12 +19,15 @@ done
 
 shopt -s nullglob
 srcs=(src/*.c)
-mkdir -p build
 # -Wno-invalid-feature-combination: clang 18 with -march=native on AVX10.1 CPUs (some GitHub
 # runners) warns about its own feature detection, which -Werror would turn into a build failure.
+flags=("${opt[@]}" -march="$march" -fno-omit-frame-pointer -Wall -Wextra -Werror
+    -Wno-invalid-feature-combination -Iinclude)
+mkdir -p build
 for t in tests/*.c; do
-    "$cc" "${opt[@]}" -march="$march" -fno-omit-frame-pointer -Wall -Wextra -Werror \
-        -Wno-invalid-feature-combination -Iinclude \
-        "$t" "${srcs[@]}" -o "build/$(basename "$t" .c)"
+    "$cc" "${flags[@]}" "$t" "${srcs[@]}" -o "build/$(basename "$t" .c)"
 done
+if [ "$(uname -m)" = x86_64 ]; then # bench/tsc.h reads the x86 TSC
+    "$cc" "${flags[@]}" bench/bench.c "${srcs[@]}" -o build/bench
+fi
 echo "built with $cc -march=$march ${opt[*]}"

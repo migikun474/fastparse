@@ -11,3 +11,11 @@ Branchless SWAR, x86-64 assembly and SSE/AVX2 parsers that turn market-data text
 ```
 
 Benchmark corpora (10M lines each, about 300 MB in `data/`, not committed): `./scripts/gen_corpus.sh`
+
+## Benchmark (x86-64, Linux)
+
+```bash
+sudo ./scripts/tune_cpu.sh             # performance governor, turbo off, perf counters allowed
+./scripts/run_bench.sh                 # or --cc clang; pinned to core 3, writes results/<date>-<cc>.json
+sudo ./scripts/tune_cpu.sh --restore
+```

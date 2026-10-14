@@ -109,3 +109,42 @@ Source of truth: plan row 1: `fp_u64_ref`, `fp_u64_naive`, `fp_px_ref`, `gen_cor
 
 1. `git push -u origin phase-1-reference-naive`, then open the PR.
 2. Add the three `sanitizers` checks to `main`'s branch protection once they have run.
+
+## 2026-10-15 — Phase 2: benchmark harness
+
+Source of truth: plan row 2: `tsc.h` (rdtsc/rdtscp + calibration), histogram, throughput and latency modes, `run_bench.sh`, `tune_cpu.sh`, `bench.yml` with cachegrind instruction counts. Done when: local table of naive with p50/p99/p99.9, and CI posts instruction counts.
+
+### Actions
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:15 | Checked Phase 1 merged and the machine | `git fetch`, `git log origin/main`; `which perf valgrind jq taskset`, `/proc/cpuinfo`, cpufreq sysfs, `perf_event_paranoid`, `systemd-detect-virt` | PR #3 merged (`bdc47ba`). AMD Ryzen 7 7840HS, bare metal, `constant_tsc` + `nonstop_tsc`, amd-pstate-epp `powersave`, boost on, `perf_event_paranoid=4`, no valgrind |
+| 03:18 | Asked user two questions | none | Plan asks for naive on four corpora, but naive can't parse prices and binance is Phase 5. Tuning needs root. Answers: 3 corpora (binance in Phase 5); user runs `tune_cpu.sh`, I run the bench |
+| 03:22 | Created branch | `git checkout --no-track -b phase-2-bench-harness origin/main`, `mkdir -p bench results` | |
+| 03:24 | Added harness | `bench/tsc.h`, `bench/bench.c` | See decisions |
+| 03:26 | Added scripts and CI | `scripts/tune_cpu.sh`, `scripts/run_bench.sh`, `scripts/count_instr.sh`, `.github/workflows/bench.yml`; `build.sh` builds `build/bench` on x86-64 (flags moved into one array); `selftest.sh` gets 5 bench checks and a 5000-line corpus | |
+| 03:27 | First check run | gcc + clang build; `selftest.sh`; `--san` bench run | Found 3 problems (next rows) |
+| 03:28 | Problem: selftest didn't copy `bench/` | selftest reported "clean tree builds" FAIL | Added `bench` to its `cp -r` |
+| 03:28 | Problem: `cyc` leaked under ASan | LeakSanitizer exited before stdout was flushed, so the JSON was lost; a second sanitized run hung in LSan's exit check (`anon_pipe_read`) and was killed (`kill 93607`) | `free(cyc)`. All 3 modes then pass under ASan+UBSan with gcc and clang |
+| 03:30 | Verified | `selftest.sh` 17/17 for gcc and clang; `--march x86-64` build; `bench` usage error → exit 2, missing file → exit 1; `tune_cpu.sh` as non-root → refuses, exit 1; clang-format clean | |
+| 03:32 | Dry run of `run_bench.sh` (untuned, 100k corpus) | `scripts/run_bench.sh` | Ran end to end in 12 s. Naive is about 1.5× faster than ref; all parsers slow down on `uniform`. Not committed |
+| 03:33 | Two fixes from the dry run | `run_bench.sh`: regenerate corpora unless each has 10M lines; results file named `<date>-<cc>.json` (hostname removed, repo is public); removed dry-run `results/*.json` and `data/` | A leftover small corpus would have silently skewed results |
+| 03:34 | Committed harness | `git add -A`, `git commit` (author `migikun474 <amirishettysaivignesh1@gmail.com>`, no co-author trailer) | Not pushed. Tuned results come next |
+
+### Decisions
+
+- **Timer:** inline asm `lfence; rdtsc` / `rdtscp; lfence`, as the plan asks (it lists rdtsc inline asm as an asm skill item). Calibrated over 100 ms against `CLOCK_MONOTONIC`. The output reports **TSC ticks**, which equal core cycles only with turbo off. True core cycles come from the perf counters.
+- **No `hist.c`:** every 1024-number batch time is kept and `qsort`ed, which gives exact percentiles. At most about 100k samples per run, so a histogram would only add approximation.
+- **Throughput vs latency:** latency mode adds `(v & zero)` to the next input address, where `zero` is read from a `volatile` that is always 0, so each parse waits for the previous result. Results are summed into a `volatile` sink.
+- **Perf counters in-process** (`perf_event_open`, group of cycles/instructions/branches/branch-misses) around the timed reps only. `perf stat` around the whole process would also count file loading, calibration and warm-up. When `perf_event_paranoid` forbids it, the JSON has `"perf": null`.
+- **`bench list` is the single list of parser/corpus pairs**, read by both `run_bench.sh` and `count_instr.sh`.
+- **`count_instr.sh`:** cachegrind `--cache-sim=no` on `bench … count`. It sums the `Ir` rows under `fn=<parser>` in the cachegrind output file and divides by the line count, so only instructions inside the parser function count. Its output is TSV, not JSON: it is a CI artifact with three columns.
+- **`bench.yml`:** builds with `-march=x86-64-v3` because valgrind can't run AVX-512, which `native` may pick on a runner. Uses a 100k corpus (counts are per number). Downloads the last successful main run's `instructions.tsv` with `gh run download`, warns (`::warning::`) on a rise over 5%, and writes the table to the job summary.
+- **`tune_cpu.sh`:** saves the old values to `/run` (cleared at reboot, as these settings are), sets the performance governor on all cores, turns boost off (AMD and Intel paths), and sets `perf_event_paranoid=2`. `--restore` undoes it. I did not run it: it changes system settings and needs root.
+- **Skipped:** "relative speed vs naive" in CI (add with SWAR in Phase 3, when there is a fast parser to compare); binance corpus (Phase 5, user's choice).
+
+### Not verified locally
+
+- `count_instr.sh` and `bench.yml`: valgrind isn't installed here, so they first run in CI after merge (or via manual dispatch).
+- `shellcheck` / `cppcheck`: not installed; they first run in `lint.yml`.
+- `tune_cpu.sh` beyond its root check.
