@@ -30,6 +30,9 @@ Source of truth: `SIMD number parser plan.md`, section "Implementation phases", 
 | 02:25 | Ran selftest | `CC=gcc scripts/selftest.sh`, `CC=clang scripts/selftest.sh` | 8/8 checks passed on both compilers |
 | 02:25 | Checked selftest catches a regression | `sed` made `test.sh` always `exit 0` → selftest exit 1 (2 checks failed); restored with `git checkout -- scripts/test.sh` | A test that can't fail proves nothing |
 | 02:26 | Committed | `git add -A`, `git commit` (same author, no co-author trailer) | |
+| 02:40 | Push and log read blocked, user pushed and opened the PR | user ran `git push`, `gh pr create` | Permission check stopped my push; user did it |
+| 02:45 | Read failing lint log (user allowed it) | `gh run view <id> --log-failed` | `ci`: 14/14 green. `lint`: cppcheck `knownConditionTrueFalse` on `CHECK(FP_OK == 0)` in `tests/test_smoke.c` |
+| 02:46 | Suppressed that rule for that file only | `lint.yml`: `--suppress=knownConditionTrueFalse:tests/test_smoke.c` | The smoke test compares constants on purpose; the rule stays on for every other file |
 
 ### Decisions
 
