@@ -17,3 +17,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/build.sh --cc ${{ matrix.cc }} --march ${{ matrix.march }}
       - run: ./scripts/test.sh
+      - run: CC=${{ matrix.cc }} ./scripts/selftest.sh
