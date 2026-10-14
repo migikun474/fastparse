@@ -21,7 +21,7 @@ echo "|---|---|--:|"
 for cc in gcc clang; do
     scripts/build.sh --cc "$cc" --march "$march" >/dev/null
     cp build/bench "build/asm/bench-$cc"
-    for fn in fp_u64_naive fp_u64_swar; do
+    for fn in fp_u64_naive fp_u64_swar fp_u64_sse fp_px_sse; do
         echo "| $fn | $cc | $(dump "build/asm/bench-$cc" "$fn" "$fn-$cc") |"
     done
 done

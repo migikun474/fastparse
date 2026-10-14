@@ -10,6 +10,8 @@ int main(void) {
         memset(b, '0', n);
         for (uint64_t want = 0;; want++) {
             for (size_t k = 0; k < LEN(u64_parsers); k++) {
+                if (!runnable(u64_parsers[k].sse))
+                    continue;
                 uint64_t v = ~0ULL;
                 if ((u64_parsers[k].f(b, n, &v) != (int)n || v != want) && ++fails <= 10)
                     printf("FAIL %s \"%.*s\": got %llu\n", u64_parsers[k].name, (int)n, b,
