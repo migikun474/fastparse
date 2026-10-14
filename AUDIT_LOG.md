@@ -80,6 +80,12 @@ Source of truth: plan row 1: `fp_u64_ref`, `fp_u64_naive`, `fp_px_ref`, `gen_cor
 | 02:41 | Added a determinism check to selftest | `same_twice` in `selftest.sh`; checked that it fails when `rand()` is put back | Guards the bug just fixed |
 | 02:41 | Removed generated data | `rm -rf data` | Corpora are not committed |
 | 02:42 | Committed | `git add -A`, `git commit` (author `migikun474 <amirishettysaivignesh1@gmail.com>`, no co-author trailer) | Not pushed |
+| 02:50 | User pushed; 2 checks failed | `gh run list --branch phase-1-reference-naive`, `gh run view <id> --log-failed` for `ci` and `lint` | `sanitizers` passed. `ci` push run passed, but the PR run failed on one job |
+| 02:51 | Cause 1: clang 18 + `-march=native` on an AVX10.1 runner | job `test (ubuntu-latest, clang, x86-64-v2)`, step `selftest.sh` (which builds with `native`): `invalid feature combination: +avx10.1-256` under `-Werror` | Depends on which CPU the runner gets, which is why the same commit passed on push. Reproduced locally with `clang -march=sapphirerapids -mavx10.1-256 -Werror` (exit 74) |
+| 02:52 | Fix 1 in `build.sh` | added `-Wno-invalid-feature-combination` (gcc accepts unknown `-Wno-*`) | Every build goes through `build.sh`, so this one line covers ci, sanitizers and selftest. Checked with a clang wrapper adding `-mavx10.1-256`: `build.sh` without the fix fails (via `git stash`), with it passes |
+| 02:52 | Cause 2 + fix: shellcheck | SC2054 on `-fsanitize=address,undefined` in an array → quoted it. SC2317 on the selftest helpers called through `expect_ok` → file-level `# shellcheck disable=SC2317` | Both are false positives |
+| 02:53 | Re-ran everything | gcc + clang, normal + `--san`, `selftest.sh` 12/12 for both, `bash -n` | All pass. shellcheck itself is still not available locally |
+| 02:53 | Committed | same author, no trailer | Not pushed |
 
 ### Decisions
 

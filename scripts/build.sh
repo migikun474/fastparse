@@ -12,7 +12,7 @@ while [ $# -gt 0 ]; do
     case $1 in
         --cc) cc=$2; shift 2 ;;
         --march) march=$2; shift 2 ;;
-        --san) opt=(-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all); shift ;;
+        --san) opt=(-O1 -g "-fsanitize=address,undefined" -fno-sanitize-recover=all); shift ;;
         *) echo "usage: $0 [--cc CC] [--march ARCH] [--san]" >&2; exit 2 ;;
     esac
 done
@@ -20,8 +20,11 @@ done
 shopt -s nullglob
 srcs=(src/*.c)
 mkdir -p build
+# -Wno-invalid-feature-combination: clang 18 with -march=native on AVX10.1 CPUs (some GitHub
+# runners) warns about its own feature detection, which -Werror would turn into a build failure.
 for t in tests/*.c; do
-    "$cc" "${opt[@]}" -march="$march" -fno-omit-frame-pointer -Wall -Wextra -Werror -Iinclude \
+    "$cc" "${opt[@]}" -march="$march" -fno-omit-frame-pointer -Wall -Wextra -Werror \
+        -Wno-invalid-feature-combination -Iinclude \
         "$t" "${srcs[@]}" -o "build/$(basename "$t" .c)"
 done
 echo "built with $cc -march=$march ${opt[*]}"

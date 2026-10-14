@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2317  # helper functions are called through expect_ok
 # Check that the build/test tooling itself works: good code passes, bad code fails.
 # Runs on a throwaway copy of the repo, so nothing here is modified.
 # Usage: CC=gcc|clang scripts/selftest.sh
