@@ -1,0 +1,19 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        cc: [gcc, clang]
+        march: [x86-64, x86-64-v2, x86-64-v3]
+        include:
+          - os: ubuntu-24.04-arm
+            cc: gcc
+            march: native
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/build.sh --cc ${{ matrix.cc }} --march ${{ matrix.march }}
+      - run: ./scripts/test.sh
