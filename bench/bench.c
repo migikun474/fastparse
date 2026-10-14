@@ -24,6 +24,8 @@ static const struct {
 } parsers[] = {
     {"fp_u64_ref", fp_u64_ref, NULL, {"fixed8", "uniform"}},
     {"fp_u64_naive", fp_u64_naive, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_swar", fp_u64_swar, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_asm", fp_u64_asm, NULL, {"fixed8", "uniform"}},
     {"fp_px_ref", NULL, fp_px_ref, {"prices", NULL}},
 };
 #define NPARSERS (sizeof parsers / sizeof *parsers)

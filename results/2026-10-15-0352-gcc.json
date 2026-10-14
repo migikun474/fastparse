@@ -1,0 +1,427 @@
+{
+  "date": "2026-10-15T03:52:22+05:30",
+  "cpu": "AMD Ryzen 7 7840HS w/ Radeon 780M Graphics",
+  "kernel": "7.0.0-38-generic",
+  "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "build": "built with gcc -march=native -O2",
+  "core": 3,
+  "governor": "performance",
+  "boost": "0",
+  "reps": 10,
+  "runs": [
+    {
+      "parser": "fp_u64_ref",
+      "corpus": "fixed8",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 63.6,
+      "mb_per_s": 508.7,
+      "tsc_per_num": {
+        "p50": 59.41,
+        "p99": 83.76,
+        "p999": 99.08,
+        "max": 238.65
+      },
+      "ns_per_num_p50": 15.66,
+      "perf": {
+        "cycles": 58.93,
+        "instructions": 230.07,
+        "branches": 31.01,
+        "branch_misses": 0.0011
+      }
+    },
+    {
+      "parser": "fp_u64_ref",
+      "corpus": "fixed8",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 58.1,
+      "mb_per_s": 464.4,
+      "tsc_per_num": {
+        "p50": 64.50,
+        "p99": 89.58,
+        "p999": 106.65,
+        "max": 253.46
+      },
+      "ns_per_num_p50": 17.00,
+      "perf": {
+        "cycles": 64.54,
+        "instructions": 233.07,
+        "branches": 31.01,
+        "branch_misses": 0.0011
+      }
+    },
+    {
+      "parser": "fp_u64_ref",
+      "corpus": "uniform",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 37.5,
+      "mb_per_s": 374.5,
+      "tsc_per_num": {
+        "p50": 100.08,
+        "p99": 126.58,
+        "p999": 146.58,
+        "max": 817.96
+      },
+      "ns_per_num_p50": 26.39,
+      "perf": {
+        "cycles": 100.03,
+        "instructions": 278.07,
+        "branches": 37.01,
+        "branch_misses": 1.0158
+      }
+    },
+    {
+      "parser": "fp_u64_ref",
+      "corpus": "uniform",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 36.2,
+      "mb_per_s": 362.2,
+      "tsc_per_num": {
+        "p50": 103.79,
+        "p99": 129.29,
+        "p999": 150.18,
+        "max": 303.26
+      },
+      "ns_per_num_p50": 27.37,
+      "perf": {
+        "cycles": 103.44,
+        "instructions": 281.08,
+        "branches": 37.01,
+        "branch_misses": 1.0145
+      }
+    },
+    {
+      "parser": "fp_u64_naive",
+      "corpus": "fixed8",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 95.7,
+      "mb_per_s": 765.3,
+      "tsc_per_num": {
+        "p50": 39.15,
+        "p99": 60.41,
+        "p999": 80.64,
+        "max": 405.57
+      },
+      "ns_per_num_p50": 10.32,
+      "perf": {
+        "cycles": 39.15,
+        "instructions": 151.07,
+        "branches": 22.01,
+        "branch_misses": 0.0011
+      }
+    },
+    {
+      "parser": "fp_u64_naive",
+      "corpus": "fixed8",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 89.3,
+      "mb_per_s": 714.4,
+      "tsc_per_num": {
+        "p50": 41.86,
+        "p99": 63.09,
+        "p999": 79.56,
+        "max": 207.37
+      },
+      "ns_per_num_p50": 11.04,
+      "perf": {
+        "cycles": 41.99,
+        "instructions": 154.07,
+        "branches": 22.01,
+        "branch_misses": 0.0011
+      }
+    },
+    {
+      "parser": "fp_u64_naive",
+      "corpus": "uniform",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 61.3,
+      "mb_per_s": 612.7,
+      "tsc_per_num": {
+        "p50": 61.30,
+        "p99": 84.13,
+        "p999": 99.04,
+        "max": 326.38
+      },
+      "ns_per_num_p50": 16.16,
+      "perf": {
+        "cycles": 61.18,
+        "instructions": 181.07,
+        "branches": 26.01,
+        "branch_misses": 0.9823
+      }
+    },
+    {
+      "parser": "fp_u64_naive",
+      "corpus": "uniform",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 61.4,
+      "mb_per_s": 614.4,
+      "tsc_per_num": {
+        "p50": 61.19,
+        "p99": 83.61,
+        "p999": 98.23,
+        "max": 208.89
+      },
+      "ns_per_num_p50": 16.13,
+      "perf": {
+        "cycles": 61.02,
+        "instructions": 184.08,
+        "branches": 26.01,
+        "branch_misses": 0.9880
+      }
+    },
+    {
+      "parser": "fp_u64_swar",
+      "corpus": "fixed8",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 195.4,
+      "mb_per_s": 1563.2,
+      "tsc_per_num": {
+        "p50": 18.41,
+        "p99": 32.80,
+        "p999": 54.77,
+        "max": 179.24
+      },
+      "ns_per_num_p50": 4.85,
+      "perf": {
+        "cycles": 19.23,
+        "instructions": 97.07,
+        "branches": 8.01,
+        "branch_misses": 0.0010
+      }
+    },
+    {
+      "parser": "fp_u64_swar",
+      "corpus": "fixed8",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 147.0,
+      "mb_per_s": 1175.6,
+      "tsc_per_num": {
+        "p50": 25.38,
+        "p99": 35.22,
+        "p999": 57.41,
+        "max": 205.14
+      },
+      "ns_per_num_p50": 6.69,
+      "perf": {
+        "cycles": 25.55,
+        "instructions": 100.07,
+        "branches": 8.01,
+        "branch_misses": 0.0010
+      }
+    },
+    {
+      "parser": "fp_u64_swar",
+      "corpus": "uniform",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 102.5,
+      "mb_per_s": 1024.9,
+      "tsc_per_num": {
+        "p50": 36.44,
+        "p99": 58.52,
+        "p999": 69.91,
+        "max": 241.43
+      },
+      "ns_per_num_p50": 9.61,
+      "perf": {
+        "cycles": 36.60,
+        "instructions": 123.60,
+        "branches": 9.48,
+        "branch_misses": 0.6388
+      }
+    },
+    {
+      "parser": "fp_u64_swar",
+      "corpus": "uniform",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 99.5,
+      "mb_per_s": 995.4,
+      "tsc_per_num": {
+        "p50": 37.52,
+        "p99": 54.77,
+        "p999": 74.22,
+        "max": 186.36
+      },
+      "ns_per_num_p50": 9.89,
+      "perf": {
+        "cycles": 37.68,
+        "instructions": 126.60,
+        "branches": 9.48,
+        "branch_misses": 0.6399
+      }
+    },
+    {
+      "parser": "fp_u64_asm",
+      "corpus": "fixed8",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 218.8,
+      "mb_per_s": 1750.4,
+      "tsc_per_num": {
+        "p50": 17.07,
+        "p99": 22.75,
+        "p999": 43.12,
+        "max": 144.50
+      },
+      "ns_per_num_p50": 4.50,
+      "perf": {
+        "cycles": 17.20,
+        "instructions": 81.07,
+        "branches": 8.01,
+        "branch_misses": 0.0010
+      }
+    },
+    {
+      "parser": "fp_u64_asm",
+      "corpus": "fixed8",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 135.9,
+      "mb_per_s": 1087.1,
+      "tsc_per_num": {
+        "p50": 27.54,
+        "p99": 34.10,
+        "p999": 60.45,
+        "max": 190.45
+      },
+      "ns_per_num_p50": 7.26,
+      "perf": {
+        "cycles": 27.62,
+        "instructions": 84.07,
+        "branches": 8.01,
+        "branch_misses": 0.0010
+      }
+    },
+    {
+      "parser": "fp_u64_asm",
+      "corpus": "uniform",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 104.6,
+      "mb_per_s": 1046.1,
+      "tsc_per_num": {
+        "p50": 35.77,
+        "p99": 53.70,
+        "p999": 70.06,
+        "max": 245.07
+      },
+      "ns_per_num_p50": 9.43,
+      "perf": {
+        "cycles": 35.87,
+        "instructions": 117.18,
+        "branches": 9.48,
+        "branch_misses": 0.6395
+      }
+    },
+    {
+      "parser": "fp_u64_asm",
+      "corpus": "uniform",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 95.9,
+      "mb_per_s": 958.6,
+      "tsc_per_num": {
+        "p50": 38.93,
+        "p99": 60.12,
+        "p999": 76.41,
+        "max": 363.52
+      },
+      "ns_per_num_p50": 10.26,
+      "perf": {
+        "cycles": 39.11,
+        "instructions": 120.19,
+        "branches": 9.48,
+        "branch_misses": 0.6327
+      }
+    },
+    {
+      "parser": "fp_px_ref",
+      "corpus": "prices",
+      "mode": "throughput",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 37.3,
+      "mb_per_s": 387.5,
+      "tsc_per_num": {
+        "p50": 100.12,
+        "p99": 132.93,
+        "p999": 155.19,
+        "max": 814.44
+      },
+      "ns_per_num_p50": 26.40,
+      "perf": {
+        "cycles": 100.47,
+        "instructions": 271.26,
+        "branches": 66.85,
+        "branch_misses": 1.8992
+      }
+    },
+    {
+      "parser": "fp_px_ref",
+      "corpus": "prices",
+      "mode": "latency",
+      "numbers": 10000000,
+      "errors": 0,
+      "tsc_ghz": 3.793,
+      "mnum_per_s": 37.2,
+      "mb_per_s": 386.8,
+      "tsc_per_num": {
+        "p50": 100.31,
+        "p99": 132.48,
+        "p999": 155.38,
+        "max": 373.43
+      },
+      "ns_per_num_p50": 26.45,
+      "perf": {
+        "cycles": 100.61,
+        "instructions": 274.26,
+        "branches": 66.85,
+        "branch_misses": 1.8438
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 /* Differential test: every u64 parser must match fp_u64_ref on random digit/junk strings. */
-#include "padded.h"
+#include "helpers.h"
 #include <stdio.h>
 
 #define ITERS 1000000
@@ -26,11 +26,12 @@ int main(void) {
         char *b = padded(s, n);
         uint64_t want = 0, got = 0;
         int rw = fp_u64_ref(b, n, &want);
-        int rg = fp_u64_naive(b, n, &got);
-        if (rw != rg || (rw > 0 && want != got)) {
-            if (++fails <= 10) {
-                printf("FAIL fp_u64_naive iter %ld: got %d/%llu want %d/%llu, bytes:", it, rg,
-                       (unsigned long long)got, rw, (unsigned long long)want);
+        for (size_t k = 1; k < LEN(u64_parsers); k++) {
+            int rg = u64_parsers[k].f(b, n, &got);
+            int bad = rw != rg || (rw > 0 && want != got);
+            if (bad && ++fails <= 10) { /* print the first 10, count all */
+                printf("FAIL %s iter %ld: got %d/%llu want %d/%llu, bytes:", u64_parsers[k].name,
+                       it, rg, (unsigned long long)got, rw, (unsigned long long)want);
                 for (size_t i = 0; i < n; i++)
                     printf(" %02x", (unsigned char)s[i]);
                 putchar('\n');
@@ -38,6 +39,6 @@ int main(void) {
         }
         free(b);
     }
-    printf("test_diff: %s (%d of %d mismatched)\n", fails ? "FAIL" : "ok", fails, ITERS);
+    printf("test_diff: %s (%d mismatches in %d strings)\n", fails ? "FAIL" : "ok", fails, ITERS);
     return fails != 0;
 }

@@ -148,3 +148,103 @@ Source of truth: plan row 2: `tsc.h` (rdtsc/rdtscp + calibration), histogram, th
 - `count_instr.sh` and `bench.yml`: valgrind isn't installed here, so they first run in CI after merge (or via manual dispatch).
 - `shellcheck` / `cppcheck`: not installed; they first run in `lint.yml`.
 - `tune_cpu.sh` beyond its root check.
+
+### Phase 2 follow-up: tuned results (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:35 | Pushed branch, opened PR #4 | `git push -u origin phase-2-bench-harness`, `gh pr create --base main` | User's "Create PR" request. No Claude attribution in the PR body |
+| 03:36 | User ran `sudo scripts/tune_cpu.sh` and installed valgrind; I confirmed | read `scaling_governor` (performance), `cpufreq/boost` (0), `perf_event_paranoid` (2), `which valgrind` | |
+| 03:37 | Tested `count_instr.sh` locally (first run anywhere) | `build.sh --march x86-64-v3`, `gen_corpus.sh 100000`, `count_instr.sh`; again with a baseline 10% lower, with itself, and with a missing file | 1.4 s. Baseline 10% lower → 5 warnings; vs itself → none; missing baseline → plain output. naive 137 / ref 216 instructions per number on fixed8 |
+| 03:38 | Full tuned benchmark | `rm -rf data`, `run_bench.sh --cc gcc`, `run_bench.sh --cc clang` (10M per corpus, core 3) | Wrote `results/2026-10-15-gcc.json` and `results/2026-10-15-clang.json` |
+| 03:43 | Checked results metadata before committing | `jq 'del(.runs)'` | CPU model, kernel, compiler, flags, governor, boost only. No hostname or username |
+| 03:43 | Committed results | `git add results AUDIT_LOG.md`, `git commit` (same author, no trailer) | Not pushed |
+
+**Findings (gcc, throughput, p50 TSC ticks per number):** naive 39.7 on fixed8 vs 61.0 on uniform; ref 59.5 vs 100.4. Branch misses per number: about 0.001 on fixed8 vs about 1.0 on uniform for both parsers, and about 1.85 for `fp_px_ref` on prices. TSC ticks agree with core cycles from the perf counters to within 5%, which confirms boost is off. Under clang, ref is as fast as naive on fixed8 (34.7 vs 35.3). p99.9 is 3–10× p50 in every row, most likely interrupts on a non-isolated core.
+
+**Reminder for the user:** `sudo scripts/tune_cpu.sh --restore` puts back the governor, boost and `perf_event_paranoid`.
+
+## 2026-10-15 — Phase 3: SWAR in C, then asm
+
+Source of truth: plan row 3: `fp_u64_swar`, `src/swar_x86_64.S`, `asm.yml` posting gcc vs clang vs hand-written instruction counts. Done when: exhaustive 1–8 digit test passes for both; PR shows SWAR vs naive on fixed8 and uniform.
+
+### Actions
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:44 | Checked state | `git fetch`, `git log origin/main`, tuning sysfs, `gh run list -w bench.yml`, `git ls-tree origin/main results/` | PR #4 merged (`3f21a74`); `bench.yml` passed its first main run. CPU back to untuned (user ran `--restore`). **The results commit `d3231ea` was pushed after the merge, so it never reached `main`** |
+| 03:44 | Branch + cherry-pick the results | `git checkout --no-track -b phase-3-swar-asm origin/main`, `git cherry-pick d3231ea` → `9951049` | Brings the Phase 2 results in with this PR; author unchanged |
+| 03:46 | Added parsers | `src/parse_swar.c`, `src/swar_x86_64.S`; prototypes in `fastparse.h`; `build.sh` assembles `src/*.S` on x86-64 only; `bench.c` lists both | |
+| 03:48 | Tests | `tests/padded.h` → `tests/helpers.h` (`git mv`) with the one shared `u64_parsers[]` list (asm entry x86 only); `test_diff` compares every parser with ref; `test_edge` adds the page-edge test; new `test_exhaustive.c` | |
+| 03:49 | Found a bug in my own test change | `test_diff`: after the 10th failure, `++fails` in the `if` plus `fails++` in the `else if` counted twice | Rewrote it as `bad && ++fails <= 10`, before running anything |
+| 03:50 | Ran tests | gcc + clang `-O2 native`: all pass first time (`test_exhaustive` 111,111,110 strings × 4 parsers, about 2.5–3.3 s for the whole suite); `--san` both pass (gcc 6.0 s, clang 4.7 s); `--march x86-64` passes | |
+| 03:52 | Mutation check | 12 hand-made bugs via `sed` (6 in `parse_swar.c`, 6 in the `.S`), originals restored from scratchpad copies | **All 12 caught** |
+| 03:53 | Added `scripts/asm_dump.sh`, ran it | gcc + clang at `-march=x86-64-v3` → `build/asm/*.s`, static counts | naive 40/42, swar gcc 105 / clang 109, hand-written 75 |
+| 03:54 | Read gcc's SWAR disassembly | `build/asm/fp_u64_swar-gcc.s` | See "Assembly comparison" |
+| 03:55 | Cachegrind per-number counts | `count_instr.sh` on a 100k corpus, gcc and clang builds | See table below |
+| 03:56 | Added `asm.yml`; added "speed relative to naive" step to `bench.yml` (deferred from Phase 2) | ran the step's loop + `jq` locally | Table renders; untuned clang: swar 2.23× naive on fixed8, 1.83× on uniform |
+| 03:57 | Final checks | `selftest.sh` 17/17 gcc + clang; clang-format; `bash -n`; aarch64 cross-check attempted | The cross-check could not run: no aarch64 sysroot headers here. ARM is first checked in CI |
+| 03:58 | Committed | `git add -A`, `git commit` (same author, no trailer) | Not pushed. Tuned benchmark pending: user needs to rerun `tune_cpu.sh` |
+
+### Decisions
+
+- **SWAR for up to 20 digits:** the plan describes one 8-digit step. Fields are cut into a leading chunk of `(n-1)%8+1` digits and then full 8s, with `value = value * 10^8 + chunk`. Overflow uses the same builtins as naive.
+- **Short chunks:** the k digits are shifted to the top bytes and the bytes below are filled with `'0'` (leading zeros), so one 8-byte digit check and one combine handle every length. The plan's `ctz`-on-non-digit-mask step isn't needed: with whole-field semantics the length is `n`, and the digit check covers every byte.
+- **Digit check:** `(x & 0xF0..) | ((x + 0x06..) & 0xF0..) >> 4 == 0x33..` (high nibble 3, and adding 6 doesn't leave it). Cross-byte carries only happen for bytes that already fail.
+- **`fp_u64_asm` implements the full contract** (any `n`, all error codes, bad char before overflow), so it is tested by the same edge, differential, exhaustive and page tests as the C parsers. Overflow uses `mul` (unsigned, high half in `rdx`) plus `adc`. `rbx` is pushed to hold the end pointer, since `mul` takes `rdx`. Error codes are `.set` in the `.S` with a "must match" comment, because the C header can't be included.
+- **Hand-written asm uses only baseline x86-64** (no BMI2), so it runs under every `-march` in the CI matrix.
+- **Page test is stricter than the plan's wording:** besides "ends exactly at a page boundary", the field is also placed `FP_PAD` bytes before a `PROT_NONE` page, so any read beyond the padding contract segfaults. ASan can't check this, because `padded()` rounds allocations up to 64.
+- **Exhaustive test** covers every 1–8 digit string including leading zeros (111,111,110), for all u64 parsers, with digit bytes after the field, so a parser that reads past `n` gives a wrong value.
+- **`asm.yml`:** static counts at a fixed `-march=x86-64-v3` (comparable between runs), alignment nops excluded. Posts one PR comment and edits it on later pushes (`gh pr comment --edit-last --create-if-none`). Disassembly is uploaded as an artifact.
+- **Not done:** `movbe`/`bswap` for ITCH binary fields (the plan lists it under stretch goals).
+
+### Assembly comparison (gcc 13 / clang 18, -O2 -march=x86-64-v3)
+
+Executed instructions per number (cachegrind, 100k corpus):
+
+| parser | gcc fixed8 | gcc uniform | clang fixed8 | clang uniform |
+| --- | --: | --: | --: | --: |
+| fp_u64_naive | 137 | 167 | 151 | 183 |
+| fp_u64_swar | 81 | 108 | 68 | 96 |
+| fp_u64_asm (same binary for both) | 67 | 103 | 67 | 103 |
+
+What gcc does differently from the hand-written version:
+- It **peels the first chunk**, so the loop body only handles full 8-byte chunks, with no shift and no fill.
+- It **keeps the six 64-bit constants in registers** across chunks, saving callee-saved registers with 6 push/pop pairs. That is why its static count (105) is higher than mine (75). Mine reloads 7 `movabs` per chunk, which costs it on multi-chunk numbers (uniform: 103 vs clang's 96).
+- It does ×10 and ×100 with **`lea` chains** (`lea (x,x,4)` then `lea (y,x5,2)`) instead of `imul`.
+- It uses **`bzhi`/`shlx`** (BMI2) for the fill mask and the shift-by-register, with no `cl` juggling.
+- It turns `x - 0x3030..` into `x + 0xcfcf..d0`, and overflow into `seto`/`setb` + `or` instead of branches.
+
+Upgrade path for the asm, if wanted: hoist constants, peel the first chunk, and use `lea` for the small multiplies.
+
+### Phase 3 follow-up: tuned results (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:50 | Pushed branch, opened PR #5 | `git push -u origin phase-3-swar-asm`, `gh pr create --base main` | User's "Create PR" request. No Claude attribution |
+| 03:51 | User ran `sudo scripts/tune_cpu.sh`; I confirmed | sysfs: performance, boost 0, paranoid 2 | |
+| 03:52 | Full tuned benchmark | `run_bench.sh --cc gcc`, `run_bench.sh --cc clang` (10M, core 3) | |
+| 03:53 | **Found: it overwrote the Phase 2 result files** | both runs wrote `results/2026-10-15-<cc>.json` (date-only names) | Renamed the new files by their JSON `date` (`-0352-gcc`, `-0353-clang`); restored Phase 2's with `git checkout --` and `git mv`'d them to `-0338-gcc`, `-0339-clang`. `run_bench.sh` now writes `<date>-<HHMM>-<cc>.json` |
+| 03:54 | **Found: some log times above were estimates** | compared with `git log --date` | Exact commit times: Phase 1 `74f79be` 02:40:00; CI fix `d2724d6` 02:43:07; Phase 2 harness `129a115` 03:27:54; Phase 2 results `d3231ea` 03:39:57; Phase 3 `679cde4` 03:49:56. Rows that disagree with these by a few minutes were written ahead of time. Times from here on are read from `date` |
+| 03:54 | Committed results + filename fix | `git add -A`, `git commit` (same author, no trailer) | Not pushed |
+
+**Tuned results (p50 TSC ticks per number, throughput / latency):**
+
+| parser | gcc fixed8 | gcc uniform | clang fixed8 | clang uniform | branch misses/num (uniform) |
+| --- | --: | --: | --: | --: | --: |
+| fp_u64_naive | 39.2 / 41.9 | 61.3 / 61.2 | 35.3 / 40.6 | 56.7 / 58.0 | 0.98 |
+| fp_u64_swar | 18.4 / 25.4 | 36.4 / 37.5 | 16.3 / 23.4 | 33.3 / 34.6 | 0.64 |
+| fp_u64_asm | 17.1 / 27.5 | 35.8 / 38.9 | 17.4 / 26.5 | 36.4 / 38.6 | 0.64 |
+
+- **SWAR vs naive, throughput:** gcc 2.04× on fixed8 and 1.67× on uniform; clang 2.33× and 1.70× (from Mnum/s).
+- **Hand-written asm vs compiled:** fastest of all with gcc on fixed8 (218.8 vs 195.4 Mnum/s; gcc's SWAR runs 97 instructions per number against the asm's 81). Behind clang's SWAR on both corpora.
+- **Not flat on uniform:** SWAR still takes 0.64 branch misses per number on uniform, from the 1-to-3-iteration chunk loop, so its uniform cost (about 36 ticks) is twice its fixed8 cost (about 18). The plan's "branchless versions stay flat" doesn't hold for 8-digit SWAR on 1–19 digit input. Expected to improve with SSE (16 digits per step) in Phase 4.
+- **Latency vs throughput:** latency mode costs SWAR about 7 extra ticks per number. Naive barely changes: its cost is the per-digit dependency chain, which latency mode doesn't add to.
+
+### Phase 3 follow-up: lint fix (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:56 | User pushed; lint failed (ci incl. ARM, sanitizers, asm passed) | `gh run list --branch phase-3-swar-asm`, `gh run view 38647559356 --log-failed` | shellcheck SC2015 on `x86=$([ ... ] && echo yes \|\| true)` in `build.sh` |
+| 03:57 | Replaced it with an `if` block; checked for other `A && B \|\| C` lines in `scripts/` | `build.sh`; `grep` | None left. Build, tests, `build/bench`, `selftest.sh` 17/17 pass |
+| 03:57 | Committed | same author, no trailer | Not pushed. ARM (first real run) passed in `ci` and `sanitizers` |

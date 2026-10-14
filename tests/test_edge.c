@@ -1,8 +1,9 @@
 /* Edge cases from the plan, run against every parser. Bytes after n are padding ('9'). */
-#include "padded.h"
+#include "helpers.h"
 #include <stdio.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
-#define LEN(a) (sizeof(a) / sizeof *(a))
 #define SENTINEL 0x5A5A5A5A5A5A5A5AULL /* *out must keep this on error */
 /* C: the whole literal is the field. P: only its first n bytes are; the rest follows in memory. */
 #define C(lit, ret, v)                                                                             \
@@ -91,25 +92,44 @@ static const struct {
 
 static const struct {
     const char *name;
-    fp_u64_fn f;
-} u64_fns[] = {{"fp_u64_ref", fp_u64_ref}, {"fp_u64_naive", fp_u64_naive}};
-
-static const struct {
-    const char *name;
     fp_px_fn f;
 } px_fns[] = {{"fp_px_ref", fp_px_ref}};
 
-int main(void) {
+/* '7' * n placed so the field ends (a) exactly at a page boundary, with the next page as padding,
+ * and (b) FP_PAD bytes before an unreadable page: a parser that reads further crashes. */
+static int page_edge_fails(void) {
+    size_t page = (size_t)sysconf(_SC_PAGESIZE);
+    char *m = mmap(NULL, 3 * page, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED || mprotect(m + 2 * page, page, PROT_NONE))
+        abort();
+    memset(m, '7', 2 * page);
+    char *ends[] = {m + page, m + 2 * page - FP_PAD};
     int fails = 0;
-    for (size_t k = 0; k < LEN(u64_fns); k++)
+    for (size_t e = 0; e < LEN(ends); e++)
+        for (size_t n = 1; n <= 24; n++) {
+            uint64_t want = 0, v = 0;
+            int rw = fp_u64_ref(ends[e] - n, n, &want);
+            for (size_t k = 1; k < LEN(u64_parsers); k++)
+                if (u64_parsers[k].f(ends[e] - n, n, &v) != rw || (rw > 0 && v != want)) {
+                    printf("FAIL %s page edge %zu, n=%zu\n", u64_parsers[k].name, e, n);
+                    fails++;
+                }
+        }
+    munmap(m, 3 * page);
+    return fails;
+}
+
+int main(void) {
+    int fails = page_edge_fails();
+    for (size_t k = 0; k < LEN(u64_parsers); k++)
         for (size_t i = 0; i < LEN(u64_cases); i++) {
             char *b = padded(u64_cases[i].s, u64_cases[i].len);
             uint64_t v = SENTINEL;
-            int r = u64_fns[k].f(b, u64_cases[i].n, &v);
+            int r = u64_parsers[k].f(b, u64_cases[i].n, &v);
             uint64_t want = u64_cases[i].ret > 0 ? u64_cases[i].v : SENTINEL;
             if (r != u64_cases[i].ret || v != want) {
-                printf("FAIL %s u64_cases[%zu]: got %d/%llu want %d/%llu\n", u64_fns[k].name, i, r,
-                       (unsigned long long)v, u64_cases[i].ret, (unsigned long long)want);
+                printf("FAIL %s u64_cases[%zu]: got %d/%llu want %d/%llu\n", u64_parsers[k].name, i,
+                       r, (unsigned long long)v, u64_cases[i].ret, (unsigned long long)want);
                 fails++;
             }
             free(b);

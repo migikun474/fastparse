@@ -19,6 +19,11 @@ done
 
 shopt -s nullglob
 srcs=(src/*.c)
+x86=
+if [ "$(uname -m)" = x86_64 ]; then
+    x86=yes
+    srcs+=(src/*.S) # hand-written x86-64 assembly
+fi
 # -Wno-invalid-feature-combination: clang 18 with -march=native on AVX10.1 CPUs (some GitHub
 # runners) warns about its own feature detection, which -Werror would turn into a build failure.
 flags=("${opt[@]}" -march="$march" -fno-omit-frame-pointer -Wall -Wextra -Werror
@@ -27,7 +32,7 @@ mkdir -p build
 for t in tests/*.c; do
     "$cc" "${flags[@]}" "$t" "${srcs[@]}" -o "build/$(basename "$t" .c)"
 done
-if [ "$(uname -m)" = x86_64 ]; then # bench/tsc.h reads the x86 TSC
+if [ -n "$x86" ]; then # bench/tsc.h reads the x86 TSC
     "$cc" "${flags[@]}" bench/bench.c "${srcs[@]}" -o build/bench
 fi
 echo "built with $cc -march=$march ${opt[*]}"

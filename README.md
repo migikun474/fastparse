@@ -16,6 +16,8 @@ Benchmark corpora (10M lines each, about 300 MB in `data/`, not committed): `./s
 
 ```bash
 sudo ./scripts/tune_cpu.sh             # performance governor, turbo off, perf counters allowed
-./scripts/run_bench.sh                 # or --cc clang; pinned to core 3, writes results/<date>-<cc>.json
+./scripts/run_bench.sh                 # or --cc clang; pinned to core 3, writes results/<date>-<HHMM>-<cc>.json
 sudo ./scripts/tune_cpu.sh --restore
 ```
+
+Assembly: `./scripts/asm_dump.sh` writes gcc, clang and hand-written disassembly to `build/asm/` and prints instruction counts.

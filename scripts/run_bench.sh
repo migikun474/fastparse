@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Benchmark every parser on its corpora (see `build/bench list`), throughput and latency modes,
-# pinned to one core. Writes results/<date>-<cc>.json and prints a markdown table.
+# pinned to one core. Writes results/<date>-<HHMM>-<cc>.json and prints a markdown table.
 # Run `sudo scripts/tune_cpu.sh` first for stable numbers and perf counters.
 # Usage: scripts/run_bench.sh [--cc gcc|clang] [--core N]
 set -euo pipefail
@@ -34,7 +34,7 @@ for c in fixed8 uniform prices; do # regenerate if missing or left small by a te
 done
 built=$(scripts/build.sh --cc "$cc")
 mkdir -p results
-out="results/$(date +%F)-$cc.json"
+out="results/$(date +%F-%H%M)-$cc.json"
 
 build/bench list | while read -r parser corpus; do
     for mode in throughput latency; do

@@ -22,6 +22,8 @@ typedef int (*fp_px_fn)(const char *p, size_t n, int64_t *out);
 
 int fp_u64_ref(const char *p, size_t n, uint64_t *out); /* __int128, obviously correct */
 int fp_u64_naive(const char *p, size_t n, uint64_t *out);
+int fp_u64_swar(const char *p, size_t n, uint64_t *out);
+int fp_u64_asm(const char *p, size_t n, uint64_t *out); /* x86-64 only: src/swar_x86_64.S */
 
 int fp_px_ref(const char *p, size_t n, int64_t *out);
 
