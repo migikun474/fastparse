@@ -8,4 +8,4 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y cppcheck
       - run: git ls-files '*.c' '*.h' | xargs clang-format --dry-run --Werror
       - run: shellcheck scripts/*.sh
-      - run: git ls-files '*.c' | xargs cppcheck --error-exitcode=1 --enable=warning,style,performance,portability -Iinclude
+      - run: git ls-files '*.c' | xargs cppcheck --error-exitcode=1 --enable=warning,style,performance,portability --suppress=knownConditionTrueFalse:tests/test_smoke.c -Iinclude

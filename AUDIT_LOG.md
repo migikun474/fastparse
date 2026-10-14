@@ -25,6 +25,14 @@ Source of truth: `SIMD number parser plan.md`, section "Implementation phases", 
 | 02:21 | Quoted `exit "$fail"` in `test.sh` | edit | Avoid a shellcheck SC2086 warning |
 | 02:21 | Added "Build and test" section | `README.md` | One place that shows the two commands |
 | 02:22 | Wrote this log and committed | `git add -A`, `git commit` (author `migikun474 <amirishettysaivignesh1@gmail.com>`, no co-author trailer) | User's instruction |
+| 02:23 | Asked user two questions | none | No parsers exist yet, so "test cases" could mean skeleton tests or Phase 1 tests; running GitHub CI needs a push. User chose skeleton self-tests, and will push themselves |
+| 02:24 | Added skeleton self-test | `scripts/selftest.sh`; `ci.yml` gets the step `CC=${{ matrix.cc }} ./scripts/selftest.sh`; README line | Checks the tooling itself in CI: good code passes, bad code fails |
+| 02:25 | Ran selftest | `CC=gcc scripts/selftest.sh`, `CC=clang scripts/selftest.sh` | 8/8 checks passed on both compilers |
+| 02:25 | Checked selftest catches a regression | `sed` made `test.sh` always `exit 0` → selftest exit 1 (2 checks failed); restored with `git checkout -- scripts/test.sh` | A test that can't fail proves nothing |
+| 02:26 | Committed | `git add -A`, `git commit` (same author, no co-author trailer) | |
+| 02:40 | Push and log read blocked, user pushed and opened the PR | user ran `git push`, `gh pr create` | Permission check stopped my push; user did it |
+| 02:45 | Read failing lint log (user allowed it) | `gh run view <id> --log-failed` | `ci`: 14/14 green. `lint`: cppcheck `knownConditionTrueFalse` on `CHECK(FP_OK == 0)` in `tests/test_smoke.c` |
+| 02:46 | Suppressed that rule for that file only | `lint.yml`: `--suppress=knownConditionTrueFalse:tests/test_smoke.c` | The smoke test compares constants on purpose; the rule stays on for every other file |
 
 ### Decisions
 
@@ -35,6 +43,7 @@ Source of truth: `SIMD number parser plan.md`, section "Implementation phases", 
 - **`build.sh`:** compiles each `tests/*.c` with all `src/*.c` (none yet; `nullglob` makes the empty case work). Flags from the plan: `-O2 -march=<arch> -fno-omit-frame-pointer`, plus `-Wall -Wextra -Werror` so warnings fail CI. `--cc` and `--march` match the plan's `ci.yml`.
 - **`ci.yml`:** the plan's YAML, minus the `upload-artifact` step for `build/failures/`. Nothing writes that directory until Phase 1 tests exist.
 - **`lint.yml`:** runs on PRs, per the plan's table. clang-format and cppcheck run on `git ls-files` output so missing directories don't break them. cppcheck is installed with apt because the runner image doesn't include it.
+- **`selftest.sh`:** copies `include/ scripts/ tests/` into a `mktemp -d` dir and checks: the header compiles alone, `build.sh` rejects bad options, `test.sh` fails with nothing built, the clean tree builds and passes, a broken test fails, the fix passes again, and a compiler warning fails the build. Because it runs on a copy, the real tree is never edited. It runs in every `ci` matrix job, using that job's compiler.
 - **Skipped (YAGNI):** `Makefile`, the empty `src/`, `bench/`, `results/` and `data/` dirs, and the other 5 workflows. Each phase adds what it needs.
 
 ### Not verified locally
