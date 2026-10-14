@@ -148,3 +148,18 @@ Source of truth: plan row 2: `tsc.h` (rdtsc/rdtscp + calibration), histogram, th
 - `count_instr.sh` and `bench.yml`: valgrind isn't installed here, so they first run in CI after merge (or via manual dispatch).
 - `shellcheck` / `cppcheck`: not installed; they first run in `lint.yml`.
 - `tune_cpu.sh` beyond its root check.
+
+### Phase 2 follow-up: tuned results (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:35 | Pushed branch, opened PR #4 | `git push -u origin phase-2-bench-harness`, `gh pr create --base main` | User's "Create PR" request. No Claude attribution in the PR body |
+| 03:36 | User ran `sudo scripts/tune_cpu.sh` and installed valgrind; I confirmed | read `scaling_governor` (performance), `cpufreq/boost` (0), `perf_event_paranoid` (2), `which valgrind` | |
+| 03:37 | Tested `count_instr.sh` locally (first run anywhere) | `build.sh --march x86-64-v3`, `gen_corpus.sh 100000`, `count_instr.sh`; again with a baseline 10% lower, with itself, and with a missing file | 1.4 s. Baseline 10% lower → 5 warnings; vs itself → none; missing baseline → plain output. naive 137 / ref 216 instructions per number on fixed8 |
+| 03:38 | Full tuned benchmark | `rm -rf data`, `run_bench.sh --cc gcc`, `run_bench.sh --cc clang` (10M per corpus, core 3) | Wrote `results/2026-10-15-gcc.json` and `results/2026-10-15-clang.json` |
+| 03:43 | Checked results metadata before committing | `jq 'del(.runs)'` | CPU model, kernel, compiler, flags, governor, boost only. No hostname or username |
+| 03:43 | Committed results | `git add results AUDIT_LOG.md`, `git commit` (same author, no trailer) | Not pushed |
+
+**Findings (gcc, throughput, p50 TSC ticks per number):** naive 39.7 on fixed8 vs 61.0 on uniform; ref 59.5 vs 100.4. Branch misses per number: about 0.001 on fixed8 vs about 1.0 on uniform for both parsers, and about 1.85 for `fp_px_ref` on prices. TSC ticks agree with core cycles from the perf counters to within 5%, which confirms boost is off. Under clang, ref is as fast as naive on fixed8 (34.7 vs 35.3). p99.9 is 3–10× p50 in every row, most likely interrupts on a non-isolated core.
+
+**Reminder for the user:** `sudo scripts/tune_cpu.sh --restore` puts back the governor, boost and `perf_event_paranoid`.
