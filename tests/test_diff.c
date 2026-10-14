@@ -53,7 +53,6 @@ int main(void) {
         int rw = fp_u64_ref(b, n, &want);
         for (size_t k = 1; k < LEN(u64_parsers); k++)
             if (runnable(u64_parsers[k].sse)) {
-                got = 0;
                 int rg = u64_parsers[k].f(b, n, &got); /* before check(): argument order */
                 check(u64_parsers[k].name, b, n, rw, rg, want, got);
             }
@@ -62,7 +61,6 @@ int main(void) {
         rw = fp_px_ref(b, n, &pwant);
         for (size_t k = 1; k < LEN(px_parsers); k++)
             if (runnable(px_parsers[k].sse)) {
-                pgot = 0;
                 int rg = px_parsers[k].f(b, n, &pgot);
                 check(px_parsers[k].name, b, n, rw, rg, (unsigned long long)pwant,
                       (unsigned long long)pgot);

@@ -124,7 +124,8 @@ static int page_edge_fails(void) {
                     fails++;
                 }
             int64_t pwant = 0, pv = 0;
-            ends[e][-2] = '.'; /* as a price: 7..7.7 */
+            char *dot = ends[e] - 2;
+            *dot = '.'; /* as a price: 7..7.7 */
             rw = fp_px_ref(ends[e] - n, n, &pwant);
             for (size_t k = 1; k < LEN(px_parsers); k++)
                 if (runnable(px_parsers[k].sse) &&
@@ -132,7 +133,7 @@ static int page_edge_fails(void) {
                     printf("FAIL %s page edge %zu, n=%zu\n", px_parsers[k].name, e, n);
                     fails++;
                 }
-            ends[e][-2] = '7';
+            *dot = '7';
         }
     munmap(m, 3 * page);
     return fails;
@@ -140,7 +141,11 @@ static int page_edge_fails(void) {
 
 int main(void) {
     int fails = page_edge_fails();
+#ifdef __x86_64__
     const char *want_impl = runnable(1) && !getenv("FP_FORCE_SCALAR") ? "sse" : "scalar";
+#else
+    const char *want_impl = "scalar";
+#endif
     if (strcmp(fp_impl(), want_impl)) {
         printf("FAIL dispatch picked %s, want %s\n", fp_impl(), want_impl);
         fails++;

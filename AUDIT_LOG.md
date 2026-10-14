@@ -309,3 +309,12 @@ Times in this section are read from `date` as the work happened.
 
 - CI's 100M fuzz on ARM and on each `-march` (only gcc x86-64 here, 20.6 s).
 - shellcheck / cppcheck (not installed).
+
+### Phase 4 follow-up: lint fix (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 04:17 | Pushed, opened PR #6 | `git push -u origin phase-4-sse`, `gh pr create --base main` | User's "Create PR" request. No Claude attribution |
+| 04:22 | User reported a CI failure; only lint failed (ci incl. 100M fuzz on all jobs + ARM, sanitizers, asm, bench passed) | `gh run list --branch phase-4-sse`, `gh run view 38650479845 --log-failed` | cppcheck: 2× `negativeIndex` on `ends[e][-2]` (pointer minus 2, misread as an array index); `knownConditionTrueFalse` on `runnable(1)` (always 0 in the non-x86 configuration cppcheck also checks); 2× `unreadVariable` on `got = 0` / `pgot = 0` in `test_diff` |
+| 04:24 | Fixed in code, no suppressions | `test_edge`: `char *dot = ends[e] - 2`; `want_impl` under `#ifdef __x86_64__` (non-x86: "scalar"). `test_diff`: removed the two resets (the value is only compared on success, when the parser always writes it) | Tests pass gcc + clang and with `FP_FORCE_SCALAR=1`; a dispatch mutant still fails `test_edge` |
+| 04:24 | Committed | same author, no trailer | Not pushed |
