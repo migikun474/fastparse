@@ -216,3 +216,27 @@ What gcc does differently from the hand-written version:
 - It turns `x - 0x3030..` into `x + 0xcfcf..d0`, and overflow into `seto`/`setb` + `or` instead of branches.
 
 Upgrade path for the asm, if wanted: hoist constants, peel the first chunk, and use `lea` for the small multiplies.
+
+### Phase 3 follow-up: tuned results (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:50 | Pushed branch, opened PR #5 | `git push -u origin phase-3-swar-asm`, `gh pr create --base main` | User's "Create PR" request. No Claude attribution |
+| 03:51 | User ran `sudo scripts/tune_cpu.sh`; I confirmed | sysfs: performance, boost 0, paranoid 2 | |
+| 03:52 | Full tuned benchmark | `run_bench.sh --cc gcc`, `run_bench.sh --cc clang` (10M, core 3) | |
+| 03:53 | **Found: it overwrote the Phase 2 result files** | both runs wrote `results/2026-10-15-<cc>.json` (date-only names) | Renamed the new files by their JSON `date` (`-0352-gcc`, `-0353-clang`); restored Phase 2's with `git checkout --` and `git mv`'d them to `-0338-gcc`, `-0339-clang`. `run_bench.sh` now writes `<date>-<HHMM>-<cc>.json` |
+| 03:54 | **Found: some log times above were estimates** | compared with `git log --date` | Exact commit times: Phase 1 `74f79be` 02:40:00; CI fix `d2724d6` 02:43:07; Phase 2 harness `129a115` 03:27:54; Phase 2 results `d3231ea` 03:39:57; Phase 3 `679cde4` 03:49:56. Rows that disagree with these by a few minutes were written ahead of time. Times from here on are read from `date` |
+| 03:54 | Committed results + filename fix | `git add -A`, `git commit` (same author, no trailer) | Not pushed |
+
+**Tuned results (p50 TSC ticks per number, throughput / latency):**
+
+| parser | gcc fixed8 | gcc uniform | clang fixed8 | clang uniform | branch misses/num (uniform) |
+| --- | --: | --: | --: | --: | --: |
+| fp_u64_naive | 39.2 / 41.9 | 61.3 / 61.2 | 35.3 / 40.6 | 56.7 / 58.0 | 0.98 |
+| fp_u64_swar | 18.4 / 25.4 | 36.4 / 37.5 | 16.3 / 23.4 | 33.3 / 34.6 | 0.64 |
+| fp_u64_asm | 17.1 / 27.5 | 35.8 / 38.9 | 17.4 / 26.5 | 36.4 / 38.6 | 0.64 |
+
+- **SWAR vs naive, throughput:** gcc 2.04× on fixed8 and 1.67× on uniform; clang 2.33× and 1.70× (from Mnum/s).
+- **Hand-written asm vs compiled:** fastest of all with gcc on fixed8 (218.8 vs 195.4 Mnum/s; gcc's SWAR runs 97 instructions per number against the asm's 81). Behind clang's SWAR on both corpora.
+- **Not flat on uniform:** SWAR still takes 0.64 branch misses per number on uniform, from the 1-to-3-iteration chunk loop, so its uniform cost (about 36 ticks) is twice its fixed8 cost (about 18). The plan's "branchless versions stay flat" doesn't hold for 8-digit SWAR on 1–19 digit input. Expected to improve with SSE (16 digits per step) in Phase 4.
+- **Latency vs throughput:** latency mode costs SWAR about 7 extra ticks per number. Naive barely changes: its cost is the per-digit dependency chain, which latency mode doesn't add to.
