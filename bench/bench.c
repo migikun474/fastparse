@@ -26,7 +26,9 @@ static const struct {
     {"fp_u64_naive", fp_u64_naive, NULL, {"fixed8", "uniform"}},
     {"fp_u64_swar", fp_u64_swar, NULL, {"fixed8", "uniform"}},
     {"fp_u64_asm", fp_u64_asm, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_sse", fp_u64_sse, NULL, {"fixed8", "uniform"}}, /* needs SSSE3 + SSE4.1 */
     {"fp_px_ref", NULL, fp_px_ref, {"prices", NULL}},
+    {"fp_px_sse", NULL, fp_px_sse, {"prices", NULL}},
 };
 #define NPARSERS (sizeof parsers / sizeof *parsers)
 

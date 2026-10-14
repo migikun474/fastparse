@@ -27,4 +27,13 @@ int fp_u64_asm(const char *p, size_t n, uint64_t *out); /* x86-64 only: src/swar
 
 int fp_px_ref(const char *p, size_t n, int64_t *out);
 
+/* x86-64 only, and only on CPUs with SSSE3 + SSE4.1: fp_u64 / fp_px check that for you. */
+int fp_u64_sse(const char *p, size_t n, uint64_t *out);
+int fp_px_sse(const char *p, size_t n, int64_t *out);
+
+/* The fastest parser this CPU supports, picked once at load time (src/dispatch.c). */
+int fp_u64(const char *p, size_t n, uint64_t *out);
+int fp_px(const char *p, size_t n, int64_t *out);
+const char *fp_impl(void); /* "sse" or "scalar" */
+
 #endif

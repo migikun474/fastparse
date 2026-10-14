@@ -2,6 +2,7 @@ name: bench
 on:
   push:
     branches: [main]
+  pull_request: # compared with the last main run, so a PR shows any instruction-count rise
   workflow_dispatch:
 permissions:
   contents: read

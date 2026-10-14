@@ -17,15 +17,37 @@ static inline char *padded(const char *s, size_t len) {
 
 #define LEN(a) (sizeof(a) / sizeof *(a))
 
-/* Every u64 parser. The first is the reference the others are compared with. */
+/* Every parser. The first of each list is the reference the others are compared with.
+ * sse = 1: needs SSSE3 + SSE4.1, skipped (see runnable) on CPUs without them. */
 static const struct {
     const char *name;
     fp_u64_fn f;
+    int sse;
 } u64_parsers[] = {
-    {"fp_u64_ref", fp_u64_ref},
-    {"fp_u64_naive", fp_u64_naive},
-    {"fp_u64_swar", fp_u64_swar},
+    {"fp_u64_ref", fp_u64_ref, 0},   {"fp_u64_naive", fp_u64_naive, 0},
+    {"fp_u64_swar", fp_u64_swar, 0},
 #ifdef __x86_64__
-    {"fp_u64_asm", fp_u64_asm},
+    {"fp_u64_asm", fp_u64_asm, 0},   {"fp_u64_sse", fp_u64_sse, 1},
 #endif
+    {"fp_u64", fp_u64, 0},
 };
+
+static const struct {
+    const char *name;
+    fp_px_fn f;
+    int sse;
+} px_parsers[] = {
+    {"fp_px_ref", fp_px_ref, 0},
+#ifdef __x86_64__
+    {"fp_px_sse", fp_px_sse, 1},
+#endif
+    {"fp_px", fp_px, 0},
+};
+
+static inline int runnable(int sse) {
+#ifdef __x86_64__
+    return !sse || (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("sse4.1"));
+#else
+    return !sse;
+#endif
+}

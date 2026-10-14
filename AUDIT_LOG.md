@@ -248,3 +248,64 @@ Upgrade path for the asm, if wanted: hoist constants, peel the first chunk, and 
 | 03:56 | User pushed; lint failed (ci incl. ARM, sanitizers, asm passed) | `gh run list --branch phase-3-swar-asm`, `gh run view 38647559356 --log-failed` | shellcheck SC2015 on `x86=$([ ... ] && echo yes \|\| true)` in `build.sh` |
 | 03:57 | Replaced it with an `if` block; checked for other `A && B \|\| C` lines in `scripts/` | `build.sh`; `grep` | None left. Build, tests, `build/bench`, `selftest.sh` 17/17 pass |
 | 03:57 | Committed | same author, no trailer | Not pushed. ARM (first real run) passed in `ci` and `sanitizers` |
+
+## 2026-10-15 — Phase 4: SSE integers + prices
+
+Source of truth: plan row 4: `fp_u64_sse`, `fp_px_sse`, shuffle tables, `pow10` table, runtime CPU dispatch. Done when: 100M-string fuzz passes; ISA matrix runs SSE tests only where supported; no cachegrind regression.
+
+Times in this section are read from `date` as the work happened.
+
+### Actions
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 04:05 | Checked state | `git fetch`, `git log origin/main`, `gh run list --branch main`, `gh pr list --state all`, governor | PR #5 merged with all commits (`40f554a`); main ci + bench green; CPU still tuned |
+| 04:06 | Asked user three questions | none | Answers: SSE built with target attributes on every x86 build and chosen at runtime; public `fp_u64()` / `fp_px()` / `fp_impl()`; 100M fuzz in `ci` jobs, 1M elsewhere |
+| 04:07 | Branch | `git checkout --no-track -b phase-4-sse origin/main`; checked `/proc/cpuinfo` for ssse3 + sse4_1 | |
+| 04:08 | Added parsers + dispatch | `src/parse_sse.c`, `src/dispatch.c`, prototypes in `fastparse.h` | |
+| 04:09 | Tests | `helpers.h`: `u64_parsers` + new `px_parsers` with an `sse` flag and `runnable()`; `test_edge`: shared px list, SSE boundary cases (16/17 bytes, bad first/last lane, longest one-load price), page test also as a price; `test_exhaustive`: skips unrunnable; `test_diff` rewritten: u64 **and** price fuzz, `FP_FUZZ_ITERS`, one reused buffer | |
+| 04:09 | **Found a bug in my test:** gcc showed every parser "returning 0", clang passed | `check(..., f(b, n, &got), want, got)` | C leaves argument evaluation order unspecified; gcc read `got` before the call wrote it. Call first, then `check()` |
+| 04:10 | Ran tests | gcc + clang: all pass, `fp_impl sse`; `FP_FORCE_SCALAR=1`: pass, `fp_impl scalar` | |
+| 04:10 | `-march=x86-64` build | `build.sh --march x86-64`, `objdump` greps pshufb/pmaddubsw/packusdw in `fp_u64_sse` (4 found) | SSE code is in the baseline build via target attributes; tests pass |
+| 04:11 | 100M fuzz | `FP_FUZZ_ITERS=100000000 build/test_diff` (gcc, x86-64) | **0 mismatches, 100M u64 + 100M price strings, 20.6 s** |
+| 04:11 | Sanitizers | `--san` gcc 8.9 s, clang 6.5 s | Pass |
+| 04:12 | Mutation check | 13 SSE bugs + 1 dispatch bug via `sed`, restored from scratchpad copies | 13/13 SSE caught. **Dispatch mutant missed**: a wrong parser choice still gives right answers |
+| 04:12 | Fixed that gap | `fp_impl()` now reports from the chosen pointers (no separate string); `test_edge` checks `fp_impl()` is "sse" exactly when the CPU allows and `FP_FORCE_SCALAR` is unset | Mutant re-run: caught |
+| 04:13 | Wiring | `bench.c` lists `fp_u64_sse` + `fp_px_sse`; `asm_dump.sh` dumps both; `ci.yml`: `FP_FUZZ_ITERS=100000000` on `test.sh`, `FP_FORCE_SCALAR=1` rerun on the `x86-64` jobs; `bench.yml`: `pull_request` trigger | |
+| 04:13 | Checked | `asm_dump.sh`; `selftest.sh` 17/17 gcc + clang | |
+| 04:13 | Cachegrind vs main | `gh run download` main's last `instructions.tsv`; `count_instr.sh` with it as baseline | **No regression**: every existing parser identical; no warnings |
+| 04:14 | Tuned benchmark | `run_bench.sh --cc gcc` → `results/2026-10-15-0414-gcc.json`; `--cc clang` → `-0415-clang.json` | |
+| 04:17 | Committed | `git add -A`, `git commit` (same author, no trailer) | Not pushed |
+
+### Decisions
+
+- **Shuffle indices are computed, not tabled:** `index = lane + m - 16` is negative below the digits, and `pshufb` writes 0 for any index with the high bit set, so it right-aligns and zero-fills in one step. Removing the dot is the same index minus `cmpgt(index, dot - 1)` (lanes at or past the dot read one lane further). This replaces the plan's 17-entry table and second shuffle. **The `pow10` table is kept** (`scale[8 - frac]`), as the plan says.
+- **Digit test:** `max_epu8(d, 9) == 9` on `d = byte - '0'` (unsigned `d <= 9`): one compare instead of the plan's two `cmpgt`.
+- **Combine:** exactly the plan's maddubs (10,1) → madd (100,1) → packus_epi32 → madd (10000,1) → `hi * 10^8 + lo`.
+- **u64 17–20 digits:** up to 4 leading digits scalar, then one 16-byte SSE step, then `lead * 10^16 + v` with overflow builtins. **More than 20 bytes** (always an error) goes to SWAR to find which error.
+- **Prices longer than 16 bytes** (10 integer digits plus 6+ fraction digits, about 7% of the prices corpus) go to `fp_px_ref`. Marked `ponytail:` in the code. Upgrade path: a second load.
+- **Dispatch:** a load-time constructor (`__builtin_cpu_init` + `cpu_supports("ssse3")` and `("sse4.1")`), so there is no per-call check or lazy-init race. The scalar fallback for prices is `fp_px_ref`, the only scalar price parser.
+- **ISA matrix:** every x86 build contains the SSE code (user's choice). Tests skip SSE entries via `runnable()` on CPUs without SSSE3 + SSE4.1, and the `x86-64` CI jobs also run the whole suite with `FP_FORCE_SCALAR=1`. ARM has no SSE entries at all.
+
+### Results (10M numbers, core 3, tuned; p50 TSC ticks per number)
+
+| parser | gcc fixed8 | gcc uniform | clang fixed8 | clang uniform | br-miss/num uniform |
+| --- | --: | --: | --: | --: | --: |
+| naive | 39.2 | 61.7 | 35.3 | 57.5 | 0.98 |
+| swar | 18.4 | 36.1 | 16.3 | 33.3 | 0.64 |
+| **sse** | **13.2** | **19.7** | **11.3** | **18.4** | **0.28** |
+| sse, latency mode | 32.2 | 32.5 | 31.1 | 32.4 | |
+
+| parser | gcc prices | clang prices | br-miss/num |
+| --- | --: | --: | --: |
+| px_ref | 100.1 | 98.6 | 1.84 / 1.91 |
+| **px_sse** | **28.8** | **24.2** | 0.26 / 0.14 |
+
+- **SSE vs naive (throughput Mnum/s):** gcc 2.9× on fixed8 and 3.1× on uniform; clang 3.0× and 3.1×. Prices: 3.5× (gcc), 4.0× (clang).
+- **Nearly length-independent:** 63 vs 60 instructions per number (cachegrind), 18–20 vs 11–13 ticks. The remaining 0.28 misses per number on uniform come from the `n > 16` branch (3 in 19 lengths take it).
+- **Latency mode is worse than SWAR** (32 vs 25 ticks): SSE's single dependency chain is longer (vector load, sub, compare, movemask, then pshufb, maddubs, madd, packus, madd, movq, imul), and it only wins when calls overlap. Worth knowing for an order book that parses a field and acts on it immediately.
+
+### Not verified locally
+
+- CI's 100M fuzz on ARM and on each `-march` (only gcc x86-64 here, 20.6 s).
+- shellcheck / cppcheck (not installed).

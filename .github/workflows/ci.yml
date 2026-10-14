@@ -17,4 +17,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/build.sh --cc ${{ matrix.cc }} --march ${{ matrix.march }}
       - run: ./scripts/test.sh
+        env:
+          FP_FUZZ_ITERS: 100000000 # the plan's 100M-string fuzz (local default: 1M)
+      - if: matrix.march == 'x86-64'
+        run: FP_FORCE_SCALAR=1 ./scripts/test.sh # dispatch's scalar fallback
       - run: CC=${{ matrix.cc }} ./scripts/selftest.sh
