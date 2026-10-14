@@ -24,6 +24,16 @@ jobs:
       - run: |
           awk -F'\t' 'BEGIN { print "| parser | corpus | instructions/number |\n|---|---|--:|" }
                       { print "| " $1 " | " $2 " | " $3 " |" }' instructions.tsv >>"$GITHUB_STEP_SUMMARY"
+      - name: Speed relative to naive (same runner, so its speed cancels out)
+        run: |
+          build/bench list | while read -r parser corpus; do
+            build/bench "$parser" "data/$corpus.txt" throughput
+          done | jq -s -r '
+            (map(select(.parser == "fp_u64_naive") | {(.corpus): .mnum_per_s}) | add) as $naive
+            | "| parser | corpus | Mnum/s | vs naive |", "|---|---|--:|--:|",
+              (.[] | "| \(.parser) | \(.corpus) | \(.mnum_per_s) | \(if $naive[.corpus]
+                then "\((.mnum_per_s / $naive[.corpus] * 100 | round) / 100)x" else "-" end) |")
+          ' >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: instructions

@@ -19,3 +19,5 @@ sudo ./scripts/tune_cpu.sh             # performance governor, turbo off, perf c
 ./scripts/run_bench.sh                 # or --cc clang; pinned to core 3, writes results/<date>-<cc>.json
 sudo ./scripts/tune_cpu.sh --restore
 ```
+
+Assembly: `./scripts/asm_dump.sh` writes gcc, clang and hand-written disassembly to `build/asm/` and prints instruction counts.

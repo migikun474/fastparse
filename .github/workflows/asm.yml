@@ -1,0 +1,27 @@
+name: asm
+on:
+  pull_request:
+    paths: [src/**, scripts/asm_dump.sh, .github/workflows/asm.yml]
+permissions:
+  contents: read
+  pull-requests: write # to post the counts
+jobs:
+  asm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/asm_dump.sh >asm.md
+      - run: cat asm.md >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asm
+          path: build/asm/*.s
+      - name: Post the counts on the PR (one comment, updated on each push)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "### Instruction counts, gcc vs clang vs hand-written (static, -march=x86-64-v3)"
+            echo; cat asm.md
+            echo; echo "Disassembly: the \`asm\` artifact of [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          } >comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md --edit-last --create-if-none
