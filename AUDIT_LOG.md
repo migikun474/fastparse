@@ -240,3 +240,11 @@ Upgrade path for the asm, if wanted: hoist constants, peel the first chunk, and 
 - **Hand-written asm vs compiled:** fastest of all with gcc on fixed8 (218.8 vs 195.4 Mnum/s; gcc's SWAR runs 97 instructions per number against the asm's 81). Behind clang's SWAR on both corpora.
 - **Not flat on uniform:** SWAR still takes 0.64 branch misses per number on uniform, from the 1-to-3-iteration chunk loop, so its uniform cost (about 36 ticks) is twice its fixed8 cost (about 18). The plan's "branchless versions stay flat" doesn't hold for 8-digit SWAR on 1–19 digit input. Expected to improve with SSE (16 digits per step) in Phase 4.
 - **Latency vs throughput:** latency mode costs SWAR about 7 extra ticks per number. Naive barely changes: its cost is the per-digit dependency chain, which latency mode doesn't add to.
+
+### Phase 3 follow-up: lint fix (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 03:56 | User pushed; lint failed (ci incl. ARM, sanitizers, asm passed) | `gh run list --branch phase-3-swar-asm`, `gh run view 38647559356 --log-failed` | shellcheck SC2015 on `x86=$([ ... ] && echo yes \|\| true)` in `build.sh` |
+| 03:57 | Replaced it with an `if` block; checked for other `A && B \|\| C` lines in `scripts/` | `build.sh`; `grep` | None left. Build, tests, `build/bench`, `selftest.sh` 17/17 pass |
+| 03:57 | Committed | same author, no trailer | Not pushed. ARM (first real run) passed in `ci` and `sanitizers` |
