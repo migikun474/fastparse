@@ -56,3 +56,50 @@ Source of truth: `SIMD number parser plan.md`, section "Implementation phases", 
 1. Push the branch and open a draft PR: `git push -u origin phase-0-skeleton`.
 2. Branch protection on `main`: require a PR, and require the `lint` check plus each `ci` matrix check. Add these in Settings → Branches once the checks have run once, so GitHub shows their exact names.
 3. Phase 0 "done when": push a commit that breaks `test_smoke.c` (for example `FP_PAD == 63`), confirm the PR is blocked, then push the fix and confirm it turns green.
+
+## 2026-10-15 — Phase 1: reference + naive
+
+Source of truth: plan row 1: `fp_u64_ref`, `fp_u64_naive`, `fp_px_ref`, `gen_corpus.sh`, differential + edge-case tests, `sanitizers.yml`. Done when all tests pass on gcc + clang, x86-64 + ARM, under ASan/UBSan.
+
+### Actions
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 02:30 | Checked Phase 0 merged | `git status`, `git fetch origin`, `git log origin/main` | PRs #1 and #2 merged into `main` (`967140e`) |
+| 02:32 | Asked user three questions | none | The plan contradicts itself on field semantics, the 19 vs 20 digit limit, and EMPTY vs BAD_CHAR. Answers: whole field; full u64 up to 20 digits; EMPTY only for n=0 |
+| 02:34 | Created branch from merged main | `git checkout --no-track -b phase-1-reference-naive origin/main`, `mkdir -p src` | One branch per phase |
+| 02:35 | Added parsers | `include/fastparse.h` (contract comment + 3 prototypes), `src/parse_ref.c`, `src/parse_naive.c` | Phase 1 parsers |
+| 02:35 | Added tests | `tests/padded.h`, `tests/test_edge.c`, `tests/test_diff.c` | Edge + differential tests |
+| 02:36 | Added scripts and CI | `scripts/build.sh --san`, `scripts/gen_corpus.sh`, `.github/workflows/sanitizers.yml`, `scripts/selftest.sh` (copies `src/`, corpus checks), `.gitignore` (`data/`), `clang-format -i` | Phase 1 tooling |
+| 02:36 | First build: clang failed | `-Wbitwise-instead-of-logical` on `mul_overflow(...) \| add_overflow(...)` in `parse_naive.c` | Split into two `overflow \|=` lines. `\|\|` would have been wrong: it skips the add after a multiply overflow |
+| 02:37 | Full local matrix | gcc + clang × `x86-64`, `x86-64-v2`, `x86-64-v3`, `native`, plus `--san` for both; `selftest.sh` for both; `clang-format --dry-run --Werror`; `bash -n` | All pass. `test_diff`: 0 of 1,000,000 mismatched. Sanitizer run takes 0.5 s |
+| 02:37 | Mutation check of the tests | 9 hand-made bugs via `sed` on `src/*.c`, originals restored from scratchpad copies | 8 caught. The 9th (dropping the `unsigned char` cast) behaves the same, since a negative byte still wraps to a large unsigned value, so it is not a bug |
+| 02:38 | Generated full corpora | `scripts/gen_corpus.sh` | 3 × 10M lines, 300 MB, 1 min 56 s |
+| 02:39 | **Found: corpus not deterministic** | two `gen_corpus.sh 5000` runs, `md5sum` differed | Ubuntu's mawk 1.3.4 ignores `srand(42)` |
+| 02:40 | Fixed it | `gen_corpus.sh`: `rand()` replaced by Park-Miller `rnd()` (seed 42, exact in doubles) | Same corpus on every run and with any awk. Lengths come out evenly spread (checked with `uniq -c`) |
+| 02:41 | Added a determinism check to selftest | `same_twice` in `selftest.sh`; checked that it fails when `rand()` is put back | Guards the bug just fixed |
+| 02:41 | Removed generated data | `rm -rf data` | Corpora are not committed |
+| 02:42 | Committed | `git add -A`, `git commit` (author `migikun474 <amirishettysaivignesh1@gmail.com>`, no co-author trailer) | Not pushed |
+
+### Decisions
+
+- **Field semantics (user):** a parser reads exactly `[p, p+n)` and returns `n` on success. Bytes past `n` are never interpreted. Errors are checked in this order: `n == 0` → EMPTY; any byte outside the format → BAD_CHAR; then length/value → OVERFLOW; then too many fraction digits → TOO_MANY_FRAC. `*out` is written only on success. All of this is in the `fastparse.h` comment.
+- **u64 limit (user):** 1–20 digits and ≤ `UINT64_MAX`. Leading zeros count toward the 20.
+- **BAD_CHAR beats OVERFLOW (my call, reported to user):** each case has exactly one right answer, so every future parser must match the reference exactly.
+- **Price rules come from the plan's regex:** `.5` and `.` → BAD_CHAR (it needs at least one integer digit); `5.` is valid. 11+ integer digits → OVERFLOW.
+- **Naive overflow:** `__builtin_mul_overflow` / `__builtin_add_overflow` plus the `n > 20` flag, so it matches the reference without `__int128`.
+- **Tests pad every input with `'9'`** (`padded.h`, `aligned_alloc(64, …)` + FP_PAD). A parser that reads past `n` gets a different value, which the mutation check confirmed.
+- **Differential test:** 1M random strings of 0–24 bytes, 1 byte in 10 junk, splitmix64 with seed 42. It prints up to 10 failing inputs as hex. That replaces the plan's `build/failures/` upload, which was not added.
+- **Sanitizer job matrix:** x86 gcc + clang, ARM gcc, the same shape as `ci.yml`. `--san` = `-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all`, so any sanitizer report fails the run.
+- **`test_smoke.c` kept unchanged:** `selftest.sh` uses it as the test it deliberately breaks.
+- **Skipped (YAGNI):** the exhaustive 1–8 digit test (plan puts it in phase 3 with SWAR); the page-boundary edge case (reference and naive never read past `n`, and ASan already covers the buffer end; add it with SWAR); `fp_px_naive` (not in the plan).
+
+### Not verified locally
+
+- `shellcheck` and `cppcheck` are not installed here. Their first run is in `lint.yml` on the PR.
+- The ARM jobs only run on GitHub.
+
+### Left for the user
+
+1. `git push -u origin phase-1-reference-naive`, then open the PR.
+2. Add the three `sanitizers` checks to `main`'s branch protection once they have run.

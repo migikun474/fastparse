@@ -1,0 +1,17 @@
+name: sanitizers
+on: [pull_request]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        cc: [gcc, clang]
+        include:
+          - os: ubuntu-24.04-arm
+            cc: gcc
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/build.sh --cc ${{ matrix.cc }} --san
+      - run: ./scripts/test.sh

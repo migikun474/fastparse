@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 cc=${CC:-gcc}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-cp -r include scripts tests "$tmp"/
+cp -r include scripts src tests "$tmp"/
 cd "$tmp"
 
 fails=0
@@ -30,6 +30,14 @@ expect_fail "broken test fails test.sh" scripts/test.sh
 sed -i 's/FP_PAD == 63/FP_PAD == 64/' tests/test_smoke.c
 scripts/build.sh --cc "$cc" >/dev/null
 expect_ok "fixed test passes test.sh again" scripts/test.sh
+
+scripts/gen_corpus.sh 1000 >/dev/null
+corpus_ok() { [ "$(wc -l <"data/$1.txt")" -eq 1000 ] && ! grep -Eqv "$2" "data/$1.txt"; }
+expect_ok "fixed8 corpus: 1000 8-digit numbers" corpus_ok fixed8 '^[1-9][0-9]{7}$'
+expect_ok "uniform corpus: 1000 1-19 digit numbers" corpus_ok uniform '^[1-9][0-9]{0,18}$'
+expect_ok "prices corpus: 1000 valid prices" corpus_ok prices '^[1-9][0-9]{0,9}(\.[0-9]{1,8})?$'
+same_twice() { cksum data/*.txt >sum && scripts/gen_corpus.sh 1000 >/dev/null && cksum data/*.txt | cmp -s - sum; }
+expect_ok "gen_corpus.sh output is the same every run" same_twice
 
 echo 'int main(void) { int unused; return 0; }' >tests/test_warn.c
 expect_fail "compiler warning fails build.sh" scripts/build.sh --cc "$cc"
