@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Build each tests/*.c (linked with src/*.c) into build/, plus build/bench on x86-64.
-# Usage: scripts/build.sh [--cc gcc|clang] [--march x86-64|x86-64-v2|x86-64-v3|native] [--san]
+# Build each tests/test_*.c (linked with src/*.c) into build/, plus build/bench on x86-64.
+# --lib also builds build/libfastparse.a (for releases).
+# Usage: scripts/build.sh [--cc gcc|clang] [--march x86-64|x86-64-v2|x86-64-v3|native] [--san] [--lib]
 #   --san: -O1 -g with ASan + UBSan; any sanitizer report aborts the test
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -8,12 +9,14 @@ cd "$(dirname "$0")/.."
 cc=${CC:-gcc}
 march=native
 opt=(-O2)
+lib=
 while [ $# -gt 0 ]; do
     case $1 in
         --cc) cc=$2; shift 2 ;;
         --march) march=$2; shift 2 ;;
         --san) opt=(-O1 -g "-fsanitize=address,undefined" -fno-sanitize-recover=all); shift ;;
-        *) echo "usage: $0 [--cc CC] [--march ARCH] [--san]" >&2; exit 2 ;;
+        --lib) lib=yes; shift ;;
+        *) echo "usage: $0 [--cc CC] [--march ARCH] [--san] [--lib]" >&2; exit 2 ;;
     esac
 done
 
@@ -29,10 +32,18 @@ fi
 flags=("${opt[@]}" -march="$march" -fno-omit-frame-pointer -Wall -Wextra -Werror
     -Wno-invalid-feature-combination -Iinclude)
 mkdir -p build
-for t in tests/*.c; do
+for t in tests/test_*.c; do
     "$cc" "${flags[@]}" "$t" "${srcs[@]}" -o "build/$(basename "$t" .c)"
 done
 if [ -n "$x86" ]; then # bench/tsc.h reads the x86 TSC
     "$cc" "${flags[@]}" bench/bench.c "${srcs[@]}" -o build/bench
+fi
+if [ -n "$lib" ]; then
+    rm -rf build/obj build/libfastparse.a
+    mkdir -p build/obj
+    for f in "${srcs[@]}"; do
+        "$cc" "${flags[@]}" -c "$f" -o "build/obj/$(basename "$f").o"
+    done
+    ar rcs build/libfastparse.a build/obj/*.o
 fi
 echo "built with $cc -march=$march ${opt[*]}"

@@ -142,7 +142,10 @@ static int page_edge_fails(void) {
 int main(void) {
     int fails = page_edge_fails();
 #ifdef __x86_64__
-    const char *want_impl = runnable(1) && !getenv("FP_FORCE_SCALAR") ? "sse" : "scalar";
+    const char *want_impl = !runnable(1) || getenv("FP_FORCE_SCALAR") ? "scalar"
+                            : __builtin_cpu_supports("avx2") && __builtin_cpu_supports("bmi")
+                                ? "avx2"
+                                : "sse";
 #else
     const char *want_impl = "scalar";
 #endif
