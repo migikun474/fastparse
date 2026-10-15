@@ -18,7 +18,7 @@ static inline char *padded(const char *s, size_t len) {
 #define LEN(a) (sizeof(a) / sizeof *(a))
 
 /* Every parser. The first of each list is the reference the others are compared with.
- * sse = 1: needs SSSE3 + SSE4.1, skipped (see runnable) on CPUs without them. */
+ * sse = 1: needs SSSE3 + SSE4.1; 2: also AVX2 + BMI. runnable() skips them on CPUs without. */
 static const struct {
     const char *name;
     fp_u64_fn f;
@@ -44,9 +44,22 @@ static const struct {
     {"fp_px", fp_px, 0},
 };
 
+static const struct {
+    const char *name;
+    size_t (*f)(const char *, size_t, int, int64_t *, size_t);
+    int sse;
+} column_parsers[] = {
+    {"fp_px_column_ref", fp_px_column_ref, 0},
+#ifdef __x86_64__
+    {"fp_px_column_avx2", fp_px_column_avx2, 2},
+#endif
+    {"fp_px_column", fp_px_column, 0},
+};
+
 static inline int runnable(int sse) {
 #ifdef __x86_64__
-    return !sse || (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("sse4.1"));
+    return !sse || (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("sse4.1") &&
+                    (sse < 2 || (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("bmi"))));
 #else
     return !sse;
 #endif

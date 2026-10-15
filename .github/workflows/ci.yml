@@ -22,3 +22,6 @@ jobs:
       - if: matrix.march == 'x86-64'
         run: FP_FORCE_SCALAR=1 ./scripts/test.sh # dispatch's scalar fallback
       - run: CC=${{ matrix.cc }} ./scripts/selftest.sh
+      - if: matrix.cc == 'gcc' && matrix.march == 'x86-64-v3'
+        name: Binance CSV totals match the reference (3.5M real trades)
+        run: ./scripts/fetch_binance.sh && build/test_column

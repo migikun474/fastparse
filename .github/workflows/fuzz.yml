@@ -1,0 +1,29 @@
+name: fuzz
+on:
+  schedule:
+    - cron: "0 3 * * *" # nightly
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write # to report a crash
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [u64, px, column]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/fuzz.sh ${{ matrix.group }} 600
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-${{ matrix.group }}
+          path: build/fuzz/crash-*
+      - if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "fuzz: ${{ matrix.group }} parsers disagree with the reference" \
+            --body "Nightly fuzz run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} found an input. Download the \`crash-${{ matrix.group }}\` artifact and replay it with \`build/fuzz/fuzz-${{ matrix.group }} <file>\` after \`scripts/fuzz.sh ${{ matrix.group }} 1\`."

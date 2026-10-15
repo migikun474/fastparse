@@ -318,3 +318,58 @@ Times in this section are read from `date` as the work happened.
 | 04:22 | User reported a CI failure; only lint failed (ci incl. 100M fuzz on all jobs + ARM, sanitizers, asm, bench passed) | `gh run list --branch phase-4-sse`, `gh run view 38650479845 --log-failed` | cppcheck: 2× `negativeIndex` on `ends[e][-2]` (pointer minus 2, misread as an array index); `knownConditionTrueFalse` on `runnable(1)` (always 0 in the non-x86 configuration cppcheck also checks); 2× `unreadVariable` on `got = 0` / `pgot = 0` in `test_diff` |
 | 04:24 | Fixed in code, no suppressions | `test_edge`: `char *dot = ends[e] - 2`; `want_impl` under `#ifdef __x86_64__` (non-x86: "scalar"). `test_diff`: removed the two resets (the value is only compared on success, when the parser always writes it) | Tests pass gcc + clang and with `FP_FORCE_SCALAR=1`; a dispatch mutant still fails `test_edge` |
 | 04:24 | Committed | same author, no trailer | Not pushed |
+
+## 2026-10-15 — Phase 5: AVX2 CSV column + release
+
+Source of truth: plan row 5: `fp_px_column_avx2`, `fetch_binance.sh`, `results.md` generator, `fuzz.yml`, `release.yml`. Done when: the Binance CSV parses to the same totals as the reference; tag `v1.0` publishes a GitHub Release with the library and results.
+
+Exact times from `date`/file times where recorded: work ran 13:33–13:50. Steps in between are listed in order, without minute stamps I didn't capture.
+
+### Actions (in order)
+
+1. **State:** `git fetch`, `git status`, `gh pr list --state all`, `gh run list --branch main`, `/proc/cpuinfo` (avx2), `which unzip curl sha256sum`. PR #6 merged (`ff2cc8e`), main green.
+2. **Sized the download without downloading:** `curl -sI` (HEAD) for BTCUSDT/ETHUSDT/BNBUSDT on 2026-10-13/14 at data.binance.vision.
+3. **Asked four questions.** Answers:
+   - download BTCUSDT-trades-2026-10-14.zip (24.9 MB);
+   - **skip bad rows** in the column parser (not stop at the first one);
+   - add `fp_px_column_ref` and a dispatched `fp_px_column`, with AVX2 via target attribute;
+   - the user pushes tag `v1.0` after merge.
+4. **Branch:** `git checkout main && git pull --ff-only && git checkout -b phase-5-avx2-release`.
+5. **`scripts/fetch_binance.sh` + download (13:35):** the zip and Binance's `.CHECKSUM` go into their own `data/binance/` directory; `sha256sum -c` passed. Unzipped to `data/binance_trades.txt` (270 MB, **3,558,844 trades**, no header, no `\r`; prices are 14 bytes, like `83169.01000000`). Price column cut to `data/binance.txt`. All under gitignored `data/`.
+6. **`src/parse_column.c`:** `fp_px_column_ref` (byte loop + `fp_px_ref`) and `fp_px_column_avx2` (32-byte `cmpeq` for `,` and `\n`, `movemask`, `tzcnt` over the set bits, mask past `len`, fields to `fp_px_sse`). One shared `delimiter()` step, so both follow the same rules.
+7. **Header, dispatch and build:** header prototypes; `dispatch.c` adds `fp_px_column` (AVX2 + BMI → avx2, else ref), and `fp_impl()` can now say "avx2". `test_edge` expects "avx2" on AVX2 CPUs. `build.sh`: `--lib` (`build/libfastparse.a`), and test glob `tests/test_*.c` so the fuzz target isn't linked as a test.
+8. **`tests/test_column.c`:** 200k random CSVs × columns 0–3 × (no limit, max = 3) against the reference, plus the Binance check. Fixed two mistakes of mine before the first run: a pointless `padded("",0)`/`free`, and a failure message that would have printed the whole 270 MB buffer.
+9. **Binance result:** price and qty columns **match the reference value for value on all 3,558,844 rows**, with gcc and clang, and with `FP_FORCE_SCALAR=1`. Totals: price sum 294,092,821,225.44, qty sum 18,307.57283 BTC. An independent awk float sum gives 18,307.57282966 (float rounding).
+10. **Mutation check (column):** 8 mutants. First run missed "no end mask": my padding held only delimiters, so stray reads made empty fields that were skipped. Changed the padding to valid fields (`5,\n` cycling, phase varied per CSV). After that:
+    - caught: no end mask, first byte of the last block masked, newline taken as comma, last line dropped, `max` ignored, column count never reset, wrong delimiter;
+    - **missed, but equivalent:** "byte at `len` unmasked". A delimiter exactly at `len` ends the last field where the reference's end-of-buffer step does, so the stored values are identical.
+11. **Sanitizers:** `--san` passes, gcc 17.8 s, clang 11.4 s (the Binance check runs too).
+12. **bench:** column parsers + `binance` / `binance_trades` corpora; column parsers refuse latency mode (one call parses a batch). Count mode: ref and avx2 both 3,558,844 rows, 0 errors, same checksum.
+13. **libFuzzer:**
+    - `tests/fuzz_parse.c`: one target, `-DFUZZ_U64` / `-DFUZZ_PX` / `-DFUZZ_COLUMN`, traps on any mismatch. The column parser list moved into `tests/helpers.h` (shared with `test_column`).
+    - `scripts/fuzz.sh`: ASan + UBSan, crash files to `build/fuzz/`.
+    - 20 s per group: 12.5M / 16.9M / 1.1M runs, clean.
+    - **The column fuzz first missed the planted "no end mask" bug** (60 s): `padded()` fills with '9', which is never a delimiter. It now uses `5,\n` padding, and the same mutant crashes within the run and is saved as a crash file.
+14. **Scripts and workflows:**
+    - `render_results.sh` (newest JSON per compiler → `results.md`);
+    - `fuzz.yml` (nightly + manual; 3 groups × 600 s; on failure uploads the crash and opens an issue);
+    - `release.yml` (tag `v*`: `build.sh --march x86-64 --lib`, tests, tarball with lib + header + README + results.md, `gh release create`);
+    - `ci.yml`: the gcc x86-64-v3 job fetches Binance and runs `test_column`;
+    - `bench.yml`: fetches Binance before counting;
+    - `run_bench.sh`: fetches if missing, throughput only for column parsers.
+15. **Release dry run:** built `--march x86-64 --lib`, tests pass, packaged into the scratchpad. A program linked only with the packaged `.a` + header parsed "27431.55" → 2743155000000, `fp_impl()` = avx2 (runtime dispatch from a baseline-arch library).
+16. **Final checks (13:49):** `selftest.sh` 17/17 gcc + clang; clang-format clean; `bash -n`. CPU found untuned (powersave, boost 1, paranoid 4), so the tuned run and `results.md` wait for the user.
+
+### Decisions
+
+- **Skip bad rows (user):** a header, empty field, `\r` (CRLF files) or junk row is skipped, so the count shows how many were good. Documented in the header.
+- **AVX2 via `target("avx2,bmi")`**, like Phase 4's SSE, not a separate `-mavx2` unit. `tzcnt` needs BMI, so dispatch checks both.
+- **The column parser calls `fp_px_sse`** (every AVX2 CPU has SSE4.1), as the plan says.
+- **fuzz: one target, three groups.** "10 minutes per parser" became 10 minutes per group (u64, price, column), each comparing every parser of the group with its reference.
+- **Release library is baseline x86-64**, so it runs on any x86-64 CPU and still uses SSE/AVX2 where present.
+- **Not done:** the `v1.0` tag (user, after merge); a CI self-hosted bench runner (plan stretch goal).
+
+### Not verified locally
+
+- `fuzz.yml` / `release.yml` / issue creation on GitHub (scripts they call were run locally).
+- shellcheck / cppcheck (not installed).

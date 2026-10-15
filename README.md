@@ -21,3 +21,16 @@ sudo ./scripts/tune_cpu.sh --restore
 ```
 
 Assembly: `./scripts/asm_dump.sh` writes gcc, clang and hand-written disassembly to `build/asm/` and prints instruction counts.
+
+## Library
+
+```c
+#include "fastparse.h"        // link build/libfastparse.a (./scripts/build.sh --lib)
+int64_t px;
+int r = fp_px(buf, n, &px);   // r == n on success; buf needs FP_PAD readable bytes after n
+size_t k = fp_px_column(csv, len, 1, prices, max_rows);  // price column of a CSV
+```
+
+`fp_u64`, `fp_px` and `fp_px_column` pick SSE / AVX2 at load time when the CPU has them (`fp_impl()` says which).
+
+Real data: `./scripts/fetch_binance.sh` (one day of BTCUSDT trades, sha256-checked). Fuzzing: `./scripts/fuzz.sh u64|px|column [seconds]`. Results page: `./scripts/render_results.sh`.

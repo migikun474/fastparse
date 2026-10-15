@@ -32,12 +32,15 @@ for c in fixed8 uniform prices; do # regenerate if missing or left small by a te
         break
     fi
 done
+[ -f data/binance_trades.txt ] || scripts/fetch_binance.sh
 built=$(scripts/build.sh --cc "$cc")
 mkdir -p results
 out="results/$(date +%F-%H%M)-$cc.json"
 
 build/bench list | while read -r parser corpus; do
-    for mode in throughput latency; do
+    modes="throughput latency"
+    case $parser in *column*) modes=throughput ;; esac # one call parses a whole batch
+    for mode in $modes; do
         echo "  $parser $corpus $mode" >&2
         taskset -c "$core" build/bench "$parser" "data/$corpus.txt" "$mode"
     done

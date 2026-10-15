@@ -1,0 +1,26 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write # to create the release
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Baseline x86-64: SSE and AVX2 code is still inside and chosen at runtime by fp_u64/fp_px.
+      - run: ./scripts/build.sh --march x86-64 --lib
+      - run: ./scripts/test.sh
+      - name: Package and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="fastparse-$GITHUB_REF_NAME-linux-x86_64"
+          mkdir -p "$name/lib" "$name/include"
+          cp build/libfastparse.a "$name/lib/"
+          cp include/fastparse.h "$name/include/"
+          cp README.md results.md "$name/"
+          tar czf "$name.tar.gz" "$name"
+          gh release create "$GITHUB_REF_NAME" "$name.tar.gz" results.md \
+            --title "fastparse $GITHUB_REF_NAME" --notes-file results.md

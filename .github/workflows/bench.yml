@@ -15,6 +15,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y valgrind
       - run: ./scripts/build.sh --march x86-64-v3 # valgrind can't run AVX-512, which native may pick
       - run: ./scripts/gen_corpus.sh 100000 # counts are per number, so a small corpus is enough
+      - run: ./scripts/fetch_binance.sh # binance + binance_trades corpora
       - name: Download the last main run's counts
         env:
           GH_TOKEN: ${{ github.token }}

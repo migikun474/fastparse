@@ -18,17 +18,21 @@
 
 static const struct {
     const char *name;
-    fp_u64_fn u64; /* exactly one of u64 / px is set */
+    fp_u64_fn u64; /* exactly one of u64 / px / column is set */
     fp_px_fn px;
+    size_t (*column)(const char *, size_t, int, int64_t *, size_t); /* price column (1) of a CSV */
     const char *corpora[2];
 } parsers[] = {
-    {"fp_u64_ref", fp_u64_ref, NULL, {"fixed8", "uniform"}},
-    {"fp_u64_naive", fp_u64_naive, NULL, {"fixed8", "uniform"}},
-    {"fp_u64_swar", fp_u64_swar, NULL, {"fixed8", "uniform"}},
-    {"fp_u64_asm", fp_u64_asm, NULL, {"fixed8", "uniform"}},
-    {"fp_u64_sse", fp_u64_sse, NULL, {"fixed8", "uniform"}}, /* needs SSSE3 + SSE4.1 */
-    {"fp_px_ref", NULL, fp_px_ref, {"prices", NULL}},
-    {"fp_px_sse", NULL, fp_px_sse, {"prices", NULL}},
+    {"fp_u64_ref", fp_u64_ref, NULL, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_naive", fp_u64_naive, NULL, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_swar", fp_u64_swar, NULL, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_asm", fp_u64_asm, NULL, NULL, {"fixed8", "uniform"}},
+    {"fp_u64_sse", fp_u64_sse, NULL, NULL, {"fixed8", "uniform"}}, /* needs SSSE3 + SSE4.1 */
+    {"fp_px_ref", NULL, fp_px_ref, NULL, {"prices", "binance"}},
+    {"fp_px_sse", NULL, fp_px_sse, NULL, {"prices", "binance"}},
+    /* throughput only: one call parses a whole batch of rows */
+    {"fp_px_column_ref", NULL, NULL, fp_px_column_ref, {"binance_trades", NULL}},
+    {"fp_px_column_avx2", NULL, NULL, fp_px_column_avx2, {"binance_trades", NULL}}, /* AVX2 */
 };
 #define NPARSERS (sizeof parsers / sizeof *parsers)
 
@@ -36,6 +40,7 @@ static char *buf;              /* the corpus, followed by FP_PAD zero bytes */
 static uint32_t *off, *len;    /* where each number starts, and its length */
 static volatile size_t vzero;  /* always 0, but the compiler can't know that */
 static volatile uint64_t sink; /* sum of every result, so no parse can be optimised away */
+static int64_t *colbuf;        /* column parsers' output */
 
 /* Latency mode adds (v & zero), which is 0, to the next input address: each parse then has to
  * wait for the previous result, so the CPU can't overlap calls. */
@@ -54,6 +59,12 @@ static size_t parse(size_t p, size_t i, size_t j, int latency) {
     fp_px_fn fx = parsers[p].px;
     size_t errs = 0, zero = vzero;
     uint64_t sum = 0;
+    if (parsers[p].column) { /* rows [i, j) as one CSV slice, without the last '\n' */
+        size_t got =
+            parsers[p].column(buf + off[i], off[j - 1] + len[j - 1] - off[i], 1, colbuf, j - i);
+        sink += got ? (uint64_t)colbuf[got - 1] : 0;
+        return j - i - got;
+    }
     if (fu && !latency)
         LOOP(fu, uint64_t, 0);
     else if (fu)
@@ -98,7 +109,8 @@ static int cmp_u64(const void *a, const void *b) {
 
 static int usage(void) {
     fprintf(stderr, "usage: bench <parser> <corpus.txt> throughput|latency|count\n"
-                    "       bench list\n");
+                    "       bench list\n"
+                    "column parsers have no latency mode\n");
     return 2;
 }
 
@@ -116,7 +128,8 @@ int main(int argc, char **argv) {
         p++;
     const char *mode = argv[3];
     int latency = !strcmp(mode, "latency");
-    if (p == NPARSERS || (!latency && strcmp(mode, "throughput") && strcmp(mode, "count")))
+    if (p == NPARSERS || (!latency && strcmp(mode, "throughput") && strcmp(mode, "count")) ||
+        (latency && parsers[p].column))
         return usage();
 
     FILE *f = fopen(argv[2], "rb");
@@ -148,6 +161,8 @@ int main(int argc, char **argv) {
             len[n++] = (uint32_t)(i - start);
             start = i + 1;
         }
+    if (parsers[p].column && !(colbuf = malloc(n * sizeof *colbuf)))
+        return 1;
     const char *corpus = strrchr(argv[2], '/');
     corpus = corpus ? corpus + 1 : argv[2];
     int clen = (int)strcspn(corpus, ".");
@@ -192,7 +207,7 @@ int main(int argc, char **argv) {
     qsort(cyc, samples, sizeof *cyc, cmp_u64);
     double timed = (double)samples * BATCH, bytes = 0, secs = (double)total / ghz / 1e9;
     for (size_t k = 0; k < batches * BATCH; k++)
-        bytes += len[k];
+        bytes += len[k] + (parsers[p].column != NULL); /* CSV rows: count the '\n' too */
     bytes *= REPS;
 #define PCT(q) ((double)cyc[(size_t)((q) * (double)(samples - 1))] / BATCH)
     printf("{\"parser\":\"%s\",\"corpus\":\"%.*s\",\"mode\":\"%s\",\"numbers\":%zu,"
