@@ -373,3 +373,12 @@ Exact times from `date`/file times where recorded: work ran 13:33–13:50. Steps
 
 - `fuzz.yml` / `release.yml` / issue creation on GitHub (scripts they call were run locally).
 - shellcheck / cppcheck (not installed).
+
+### Phase 5 follow-up: tuned run attempt (2026-10-15)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 13:52 | Pushed, opened PR #7 | `git push -u origin phase-5-avx2-release`, `gh pr create --base main` | User's "Create PR" request. No Claude attribution; the PR warns not to tag before `results.md` lands |
+| 15:04 | User said `tune_cpu.sh` was run; ran `run_bench.sh` for gcc and clang | `results/2026-10-15-1504-gcc.json`, `-1505-clang.json` | |
+| 15:07 | **Found: governor was `powersave` during the run** on all 16 cores (EPP `balance_performance`). Boost 0 and paranoid 2 were still set | sysfs; `/run/fastparse-tune.saved` is dated 13:51 | Something reset the governor after `tune_cpu.sh`. clang `fp_u64_sse` fixed8 went 11.3 → 20.1 ticks with an unchanged instruction count (63), consistent with clock variation |
+| 15:09 | Did not commit those results; moved them to the scratchpad (`untuned/`) | `mv` | Untuned numbers must not go into `results.md` and the v1.0 release |
