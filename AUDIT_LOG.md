@@ -382,3 +382,18 @@ Exact times from `date`/file times where recorded: work ran 13:33–13:50. Steps
 | 15:04 | User said `tune_cpu.sh` was run; ran `run_bench.sh` for gcc and clang | `results/2026-10-15-1504-gcc.json`, `-1505-clang.json` | |
 | 15:07 | **Found: governor was `powersave` during the run** on all 16 cores (EPP `balance_performance`). Boost 0 and paranoid 2 were still set | sysfs; `/run/fastparse-tune.saved` is dated 13:51 | Something reset the governor after `tune_cpu.sh`. clang `fp_u64_sse` fixed8 went 11.3 → 20.1 ticks with an unchanged instruction count (63), consistent with clock variation |
 | 15:09 | Did not commit those results; moved them to the scratchpad (`untuned/`) | `mv` | Untuned numbers must not go into `results.md` and the v1.0 release |
+| 22:17 | User pinned power profile to performance and reran `tune_cpu.sh`; checked before the run | sysfs + `powerprofilesctl get` | 16/16 cores performance, boost 0, paranoid 2, profile performance |
+| 22:17–22:19 | Tuned benchmark, governor checked between and after runs (still 16/16 performance, boost 0) | `run_bench.sh --cc gcc` → `results/2026-10-15-2217-gcc.json`; `--cc clang` → `-2218-clang.json` | No governor warning from `run_bench.sh`. clang `fp_u64_sse` fixed8 back to 13.1 ticks (20.1 in the discarded run) |
+| 22:20 | Rendered `results.md` and committed | `scripts/render_results.sh`; `git commit` (same author, no trailer) | Not pushed. After this, `v1.0` can be tagged once the PR merges |
+
+**Phase 5 results (p50 TSC ticks; throughput):**
+
+| | gcc | clang |
+| --- | --: | --: |
+| `fp_px_column_ref`, Binance CSV, per row | 292.5 (973 MB/s) | 376.2 (755 MB/s) |
+| `fp_px_column_avx2`, Binance CSV, per row | **68.3 (4,071 MB/s)** | **53.0 (5,311 MB/s)** |
+| `fp_px_ref`, Binance prices | 65.5 | 57.5 |
+| `fp_px_sse`, Binance prices | **17.1** | **17.5** |
+
+- **CSV column, AVX2 vs reference:** 4.2× faster (gcc), 7.1× (clang). Whole 75-byte rows at 4–5 GB/s.
+- **Real Binance prices are easier than the synthetic ones:** every price is 14 bytes, so `fp_px_sse` gets 0.001 branch misses per number (synthetic `prices`: 0.26) and 17 ticks (synthetic: 24–29). `fp_px_ref` also benefits (65.5 vs 100.2), because its loop always runs the same number of times.
