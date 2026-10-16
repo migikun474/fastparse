@@ -408,3 +408,19 @@ Exact times from `date`/file times where recorded: work ran 13:33–13:50. Steps
 | 16:30 | Rewrote `README.md` | numbers taken only from `results/2026-10-15-2217-gcc.json` and `-2218-clang.json` via `jq`; speed-ups from their Mnum/s | |
 | 16:40 | Verified the README | the C example extracted from the README, built with `-Wall -Wextra` against `build/libfastparse.a`, run with and without `FP_FORCE_SCALAR` (output matches the README); all 14 TOC anchors and 25 file links resolve | Corrected three of my own claims: row size 76 bytes (not 75); CSV mutants 7 of 8 caught (as logged); removed an unverified claim about fast_float in `std::from_chars` |
 | 16:28 | Committed | same author, no trailer | Not pushed |
+
+## 2026-10-17 — Packaging (make install + pkg-config, Apache-2.0)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 01:05 | Checked state | `git fetch --tags`, `gh release list`, `gh release view v1.0` | User had moved `v1.0` to `8825ce4`; release "fastparse v1.0" published (static lib + header + README + results.md, 9 KB). PR #9 (README) merged |
+| 01:06 | Asked the user how to package and which license | none | Answers: **make install + pkg-config**; **Apache-2.0** |
+| 01:07 | Branch; license text | `git checkout -b package-install` (from `6c4ad0e`); `cp /usr/share/common-licenses/Apache-2.0 LICENSE` | Ubuntu's copy, sha256 `cfc7749b…3d30` (the standard Apache-2.0 LICENSE text), so no download and no retyping |
+| 01:08 | Added `Makefile` | targets `all` (`libfastparse.a`, `libfastparse.so.1.0` with soname `.so.1`, `fastparse.pc`), `install` (PREFIX, DESTDIR), `uninstall`, `clean` | `-march=x86-64` on x86 (portable; SIMD chosen at runtime), nothing on ARM. `.pc` uses `${pcfiledir}`, so it works wherever it is unpacked |
+| 01:09 | Consumer test | staged `make install`; README example built via `pkg-config` against the .so (`ldd` shows it) and the .a; `FP_FORCE_SCALAR=1` | Correct output and dispatch (avx2 / scalar) both ways. .so exports exactly the 13 `fp_*` functions, soname `libfastparse.so.1`, non-executable stack |
+| 01:10 | `make -Werror` gcc + clang; `make uninstall` | | Clean builds; uninstall leaves 0 files |
+| 01:10 | `selftest.sh`: 2 packaging checks (install + pkg-config build/run, uninstall leaves nothing); copies `Makefile` | | 19/19 gcc + clang. Broke the `.pc` libdir on purpose → the install check fails |
+| 01:11 | `release.yml` | tag must equal `v$(VERSION)`; `make install DESTDIR=… PREFIX=` into the tarball + README, LICENSE, results.md; `.sha256` asset | Ran the same steps locally (minus `gh`); the tarball unpacked into an unrelated directory builds and runs the example, shared and static |
+| 01:13 | `VERSION = 1.1` | `Makefile` | v1.0 is already published without .so/.pc/LICENSE, so this packaging is a new release. ABI unchanged → soname stays `.so.1` |
+| 01:14 | README | Install section (source + release), release-workflow row, layout, License section and TOC entry; removed "No license file yet" | The README example is byte-identical to the tested one |
+| 01:12 | Committed | same author, no trailer | Not pushed. Not verified locally: shellcheck on the new selftest lines (shellcheck not installed) |
