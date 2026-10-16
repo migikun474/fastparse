@@ -397,3 +397,14 @@ Exact times from `date`/file times where recorded: work ran 13:33–13:50. Steps
 
 - **CSV column, AVX2 vs reference:** 4.2× faster (gcc), 7.1× (clang). Whole 75-byte rows at 4–5 GB/s.
 - **Real Binance prices are easier than the synthetic ones:** every price is 14 bytes, so `fp_px_sse` gets 0.001 branch misses per number (synthetic `prices`: 0.26) and 17 ticks (synthetic: 24–29). `fp_px_ref` also benefits (65.5 vs 100.2), because its loop always runs the same number of times.
+
+## 2026-10-16 — README
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 16:25 | Checked state | `git fetch`, `git pull --ff-only` (main → `8825ce4`, PR #8 merged), `git show-ref --tags`, `gh release list`, `gh run list -w release.yml` | |
+| 16:26 | **Found: `v1.0` release failed, no GitHub Release exists** | `gh run view <id> --log-failed`: `cp: cannot stat 'results.md'`; `git ls-tree 52545b5 results.md` → absent | The tag points at `52545b5` (PR #7 merge), pushed before PR #8 added `results.md`. Not changed by me: moving a pushed tag is the user's call |
+| 16:27 | Branch | `git checkout -b docs-readme` (from `8825ce4`) | |
+| 16:30 | Rewrote `README.md` | numbers taken only from `results/2026-10-15-2217-gcc.json` and `-2218-clang.json` via `jq`; speed-ups from their Mnum/s | |
+| 16:40 | Verified the README | the C example extracted from the README, built with `-Wall -Wextra` against `build/libfastparse.a`, run with and without `FP_FORCE_SCALAR` (output matches the README); all 14 TOC anchors and 25 file links resolve | Corrected three of my own claims: row size 76 bytes (not 75); CSV mutants 7 of 8 caught (as logged); removed an unverified claim about fast_float in `std::from_chars` |
+| 16:28 | Committed | same author, no trailer | Not pushed |
