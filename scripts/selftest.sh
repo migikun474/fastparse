@@ -50,13 +50,13 @@ if [ "$(uname -m)" = x86_64 ]; then # build/bench is x86-only
 fi
 
 # Packaging: make install into a staging dir, then build a program the way a user would.
+# shellcheck disable=SC2046  # pkg-config output is meant to split into flags
 use_installed() {
     make -s >/dev/null && make -s install DESTDIR="$PWD/stage" PREFIX=/usr/local >/dev/null &&
         printf '%s\n' '#include "fastparse.h"' \
             'int main(void) { static char b[80] = "12345"; uint64_t v = 0;' \
             '    return !(fp_u64(b, 5, &v) == 5 && v == 12345); }' >use.c &&
         export PKG_CONFIG_PATH="$PWD/stage/usr/local/lib/pkgconfig" &&
-        # shellcheck disable=SC2046  # pkg-config output is meant to split into flags
         "$cc" use.c $(pkg-config --cflags --libs fastparse) -o use &&
         LD_LIBRARY_PATH="$PWD/stage/usr/local/lib" ./use
 }

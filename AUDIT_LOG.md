@@ -424,3 +424,11 @@ Exact times from `date`/file times where recorded: work ran 13:33–13:50. Steps
 | 01:13 | `VERSION = 1.1` | `Makefile` | v1.0 is already published without .so/.pc/LICENSE, so this packaging is a new release. ABI unchanged → soname stays `.so.1` |
 | 01:14 | README | Install section (source + release), release-workflow row, layout, License section and TOC entry; removed "No license file yet" | The README example is byte-identical to the tested one |
 | 01:12 | Committed | same author, no trailer | Not pushed. Not verified locally: shellcheck on the new selftest lines (shellcheck not installed) |
+
+### Packaging follow-up: lint fix (2026-10-17)
+
+| Time | Action | Commands / files | Why |
+| --- | --- | --- | --- |
+| 02:29 | User reported CI failed: only lint (ci, bench passed; sanitizers still running) | `gh run list --branch package-install`, `gh run view 38966006515 --log-failed` | shellcheck SC1126/SC1073: my `# shellcheck disable=SC2046` sat inside the `&&` chain in `use_installed()`, where a directive can't go. This was the risk noted at commit time |
+| 02:31 | Moved the directive to its own line above `use_installed() {` | `scripts/selftest.sh` | A directive before a function covers its body. `bash -n` ok, `selftest.sh` 19/19 |
+| 02:31 | Committed | same author, no trailer | Not pushed. Still not checkable locally: shellcheck not installed |
