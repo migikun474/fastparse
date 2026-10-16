@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 cc=${CC:-gcc}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-cp -r bench include scripts src tests "$tmp"/
+cp -r Makefile bench include scripts src tests "$tmp"/
 cd "$tmp"
 
 fails=0
@@ -47,6 +47,25 @@ if [ "$(uname -m)" = x86_64 ]; then # build/bench is x86-only
     expect_fail "bench: naive on prices reports errors" bench_clean fp_u64_naive prices
     expect_fail "bench rejects an unknown parser" build/bench nope data/fixed8.txt count
     expect_ok "bench: latency mode runs" build/bench fp_u64_naive data/uniform.txt latency
+fi
+
+# Packaging: make install into a staging dir, then build a program the way a user would.
+# shellcheck disable=SC2046  # pkg-config output is meant to split into flags
+use_installed() {
+    make -s >/dev/null && make -s install DESTDIR="$PWD/stage" PREFIX=/usr/local >/dev/null &&
+        printf '%s\n' '#include "fastparse.h"' \
+            'int main(void) { static char b[80] = "12345"; uint64_t v = 0;' \
+            '    return !(fp_u64(b, 5, &v) == 5 && v == 12345); }' >use.c &&
+        export PKG_CONFIG_PATH="$PWD/stage/usr/local/lib/pkgconfig" &&
+        "$cc" use.c $(pkg-config --cflags --libs fastparse) -o use &&
+        LD_LIBRARY_PATH="$PWD/stage/usr/local/lib" ./use
+}
+uninstalled() {
+    make -s uninstall DESTDIR="$PWD/stage" PREFIX=/usr/local && [ -z "$(find stage ! -type d)" ]
+}
+if command -v pkg-config >/dev/null; then
+    expect_ok "make install + pkg-config: a program builds and runs" use_installed
+    expect_ok "make uninstall removes every installed file" uninstalled
 fi
 
 echo 'int main(void) { int unused; return 0; }' >tests/test_warn.c

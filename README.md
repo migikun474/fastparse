@@ -39,6 +39,7 @@ Prices, 1–10 integer + 0–8 fraction digits              ref  100.2 ─▶ SS
 - [Limitations and known corners](#limitations-and-known-corners)
 - [How it was built](#how-it-was-built)
 - [Further reading](#further-reading)
+- [License](#license)
 
 ---
 
@@ -101,12 +102,32 @@ Needs Linux, gcc or clang, and bash. The SIMD paths and the benchmark need x86-6
 
 `build.sh` options: `--cc gcc|clang`, `--march x86-64|x86-64-v2|x86-64-v3|native`, `--san`, and `--lib` (also builds `build/libfastparse.a`).
 
-### Use it as a library
+### Install
+
+From source: this builds a static library, a shared library and a pkg-config file, then installs them.
 
 ```bash
-./scripts/build.sh --lib
-cc -O2 -Iinclude my_app.c build/libfastparse.a -o my_app
+make
+sudo make install                       # PREFIX=/usr/local by default; DESTDIR= for staging
+cc -O2 my_app.c $(pkg-config --cflags --libs fastparse) -o my_app
 ```
+
+`make uninstall` removes everything `make install` put in place. The library is built for baseline x86-64 (`-march=x86-64`), so it runs on any x86-64 CPU, and it still uses SSE and AVX2 when the CPU has them. On ARM it builds the scalar parsers only.
+
+From a release: download `fastparse-vX.Y-linux-x86_64.tar.gz` and its `.sha256` from [Releases](https://github.com/migikun474/fastparse/releases), then:
+
+```bash
+sha256sum -c fastparse-v1.1-linux-x86_64.tar.gz.sha256
+tar xzf fastparse-v1.1-linux-x86_64.tar.gz
+export PKG_CONFIG_PATH=$PWD/fastparse-v1.1-linux-x86_64/lib/pkgconfig
+cc -O2 my_app.c $(pkg-config --cflags --libs fastparse) -o my_app      # shared
+cc -O2 my_app.c $(pkg-config --cflags fastparse) \
+   fastparse-v1.1-linux-x86_64/lib/libfastparse.a -o my_app            # static
+```
+
+The tarball has the same layout as `make install` (`lib/` with `.a`, `.so` and `pkgconfig/fastparse.pc`, plus `include/`). Its `.pc` file uses paths relative to itself, so it works wherever you unpack it. With the shared library, set `LD_LIBRARY_PATH` or install it system-wide.
+
+### Example
 
 ```c
 #include "fastparse.h"
@@ -360,7 +381,7 @@ GitHub Actions calls the same scripts you run locally, so CI cannot drift from y
 | [`asm.yml`](.github/workflows/asm.yml) | PR touching `src/` | gcc vs clang vs hand-written disassembly and instruction counts, posted as one PR comment; disassembly uploaded as an artifact | no |
 | [`bench.yml`](.github/workflows/bench.yml) | push to main, PR, manual | Instructions per number with cachegrind, compared with the last main run (warns on a rise of more than 5%), plus each parser's speed relative to naive on the same runner | warns |
 | [`fuzz.yml`](.github/workflows/fuzz.yml) | nightly, manual | libFuzzer, 10 minutes per parser group; uploads the crash and opens an issue | no |
-| [`release.yml`](.github/workflows/release.yml) | tag `v*` | Builds a baseline x86-64 `libfastparse.a` (SIMD still chosen at runtime), runs the tests, and publishes a GitHub Release with the library, header, README and `results.md` | — |
+| [`release.yml`](.github/workflows/release.yml) | tag `v*` | Checks that the tag matches the Makefile's `VERSION`, runs the tests, `make install`s into a tarball (static + shared library, header, `fastparse.pc`, README, LICENSE, results), and publishes a GitHub Release with the tarball, its `.sha256` and `results.md` | — |
 
 Shared CI runners give unreliable wall-clock times, so CI tracks two stable signals instead: **instruction counts** (deterministic for the same binary and input) and **speed relative to naive** (the runner's speed cancels out). Real timing happens locally.
 
@@ -388,6 +409,8 @@ bench/
 scripts/                     every build, test, benchmark and release step (see below)
 results/                     committed JSON from tuned local runs
 results.md                   rendered from results/
+Makefile                     make / make install: libfastparse.a, .so, fastparse.pc
+LICENSE                      Apache-2.0
 AUDIT_LOG.md                 dated log of every action, command and decision
 .github/workflows/           the seven workflows above
 ```
@@ -420,7 +443,6 @@ AUDIT_LOG.md                 dated log of every action, command and decision
 - **Integer fields longer than 20 bytes** are always errors, and `fp_u64_sse` hands them to SWAR to determine which error.
 - **CRLF files:** with the skip-bad-rows rule, a `\r` makes the last field of a row invalid. Strip `\r` first, or read a column that isn't last.
 - **`FP_PAD` is a hard requirement.** Passing an unpadded buffer near the end of a page can crash.
-- **No license file yet.** Add one before reusing the code.
 
 ---
 
@@ -447,3 +469,9 @@ The project was built in six phases. Each phase was one or more PRs, opened only
 - [fast_float](https://github.com/fastfloat/fast_float): fast, exact decimal-to-float parsing
 - [simdjson](https://github.com/simdjson/simdjson): SIMD JSON parsing; the source of the padding rule
 - Intel's [Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/) for every `_mm_*` / `_mm256_*` used here
+
+---
+
+## License
+
+[Apache License 2.0](LICENSE).

@@ -9,18 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Baseline x86-64: SSE and AVX2 code is still inside and chosen at runtime by fp_u64/fp_px.
-      - run: ./scripts/build.sh --march x86-64 --lib
-      - run: ./scripts/test.sh
+      - name: Tag must match the Makefile's VERSION
+        run: |
+          version=$(sed -n 's/^VERSION = //p' Makefile)
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "tag $GITHUB_REF_NAME, Makefile $version"; exit 1; }
+      - run: ./scripts/build.sh --march x86-64 && ./scripts/test.sh
       - name: Package and publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Same layout as `make install`: lib/ (.a, .so, pkgconfig/fastparse.pc), include/.
+          # Baseline x86-64; SSE and AVX2 are still chosen at runtime.
           name="fastparse-$GITHUB_REF_NAME-linux-x86_64"
-          mkdir -p "$name/lib" "$name/include"
-          cp build/libfastparse.a "$name/lib/"
-          cp include/fastparse.h "$name/include/"
-          cp README.md results.md "$name/"
+          make install DESTDIR="$PWD/$name" PREFIX=
+          cp README.md LICENSE results.md "$name/"
           tar czf "$name.tar.gz" "$name"
-          gh release create "$GITHUB_REF_NAME" "$name.tar.gz" results.md \
+          sha256sum "$name.tar.gz" >"$name.tar.gz.sha256"
+          gh release create "$GITHUB_REF_NAME" "$name.tar.gz" "$name.tar.gz.sha256" results.md \
             --title "fastparse $GITHUB_REF_NAME" --notes-file results.md
